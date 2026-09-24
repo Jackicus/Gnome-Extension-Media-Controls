@@ -1,6 +1,6 @@
 // The audio-and-subtitles pop-out: the shell's own PopupMenu, standing on the
-// bar and pointing down at its tracks button, holding the player's audio tracks and subtitle
-// tracks as radio lists, the subtitle timing as a − / + row, and the
+// bar and pointing down at its tracks button, holding the player's audio and
+// subtitle tracks as radio lists, the subtitle timing as a − / + row, and the
 // chapters when the file has any. Everything in it comes from, and goes to,
 // a VlcRemote (vlcremote.js).
 //

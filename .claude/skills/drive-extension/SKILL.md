@@ -73,7 +73,9 @@ showing a pause is not the player pausing.
 - **The pop-out** (`click 1018 841`) stands above the bar centred on the
   tracks button, x ≈ 900–1140; its height depends on the file (the default
   clip's chapters add a row), so `shot` it and read the item rows off that
-  before clicking one. Picking keeps it open. Opened with the mouse it needs
+  before clicking one. An item's highlight follows the pointer, so park the
+  pointer away from the pop-out before checking where the keyboard or pad
+  focus landed. Picking keeps it open. Opened with the mouse it needs
   one Escape; the next Escape goes to VLC (which leaves fullscreen).
 - **Keyboard mode:** `key Super+c` opens it holding the keyboard with play
   focused; `Right`/`Left`/`Up`/`Down` move the focus, `Return` presses,
@@ -84,14 +86,14 @@ showing a pause is not the player pausing.
   a fresh pad in (1.5 s), so for a walk with shots in between, open with `pad`
   and continue with `key` steps — the path is the same.
 - **Preferences** (after `run gnome-extensions prefs media-controls@jackt`,
-  `wait 2.5`): a 640×720 window, centred in the work area — so where it lands
+  `wait 2.5`): a 640×800 window, centred in the work area — so where it lands
   depends on the panels loaded. Under `--clean` (stock top bar) its tabs are
-  Bar (687,126), Players (800,126), Controllers (925,126); with the real
-  session's Dash to Panel, y ≈ 101. Take a `shot` and read them off before
-  clicking. The first frame after a tab switch can carry redraw leftovers;
-  `wait 1` before a `window` shot. A pad plugged in
-  while Controllers is showing lists itself, and a press lights its row and the
-  button's row for 1.2 s — start `pad` in the background and shoot during it.
+  Bar (687,86), Players (800,86), Controllers (925,86); with other panels, take
+  a `shot` and read them off before clicking. The first frame after a tab
+  switch can carry redraw leftovers; `wait 1` before a `window` shot. A pad
+  plugged in while Controllers is showing lists itself, and a press lights its
+  row and the button's row for 1.2 s — start `pad` in the background and shoot
+  during it.
 - **Two players:** `player --windowed` starts a second VLC in a window on top;
   `key f` makes the focused VLC fullscreen. The bar follows focus.
 
@@ -115,12 +117,13 @@ to `extension.js`, `metadata.json` or the schema *need* one.
 
 ## Gotchas
 
-- **dconf is shared with the real session and with any other project's nested
-  shell** (`ls $XDG_RUNTIME_DIR/*-nested`). Each dconf-service rewrites the
-  whole file from its own snapshot, so change settings **before** `start` or
-  **after** `stop`, and not while another project's nested shell is up:
-  `gsettings --schemadir src/schemas set org.gnome.shell.extensions.media-controls pointer-reveal bottom-edge`.
-  Put back what you changed.
+- **Settings.** Under `--clean`, change them inside the nested session:
+  `run timeout 5 gsettings --schemadir src/schemas set org.gnome.shell.extensions.media-controls show-clock true`
+  writes its own database alone, and takes effect at once. Without `--clean`,
+  dconf is shared with the real session and every other nested shell
+  (CLAUDE.md, Gotchas): change settings **before** `start` or **after**
+  `stop`, never while another project's is up (`ls $XDG_RUNTIME_DIR/*-nested`),
+  and put back what you changed.
 - **VLC plays with no window** if it picks a GL output — the headless shell has
   no GPU for Xwayland. `player` passes `--vout=xcb_x11 --avcodec-hw=none`; keep
   them if you pass your own args.
@@ -134,8 +137,6 @@ to `extension.js`, `metadata.json` or the schema *need* one.
   `--clean`, 1600×900, the film is Big Buck Bunny (CC BY 3.0, credited in the
   README) remuxed with a silent audio track so VLC reports a real volume. The
   hero is a JPEG, the preference windows PNGs from `window`.
-- **Never `pkill -f` a pattern you are typing** — it matches your own shell.
-  `mpris Quit` or a pid.
 - **Never click or hover at the top-left**: the Activities hot corner.
 - **`Eval` is blocked** in the nested shell; drive it with input and D-Bus like a
   user would. Screenshots and banners borrow `org.gnome.SettingsDaemon.MediaKeys`

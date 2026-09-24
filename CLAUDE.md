@@ -126,12 +126,13 @@ directly cannot hide it.
 so `Player` keeps the last reading and the monotonic time it was taken, and
 `now` reckons forward from that at the current rate while playing. A reading is
 taken when the bar comes up from hidden, when a player starts playing, and
-whenever it announces `Seeked`; the bar redraws on a 250 ms timer that only
-exists while it is visible and something on it moves (the running time, the
-clock, the sleep countdown). Seeks use `SetPosition(trackid, µs)` where the
-player names its track, relative `Seek` where it does not. **Nothing blocks a
-player**: every call is asynchronous with a timeout and a cancellable that
-`disable()` cancels; players are found with `NameOwnerChanged` (arg0 namespace
+whenever it announces `Seeked`. The bar redraws on a timer that only exists
+while it is visible and something on it moves: every 250 ms while playing, and
+once a second otherwise, for the clock and the sleep countdown, which move by
+the minute. Seeks use `SetPosition(trackid, µs)` where the player names its
+track, relative `Seek` where it does not. **Nothing blocks a player**: every
+call is asynchronous with a timeout and a cancellable that `disable()` cancels;
+players are found with `NameOwnerChanged` (arg0 namespace
 `org.mpris.MediaPlayer2`) plus one `ListNames` at enable, and followed with
 `PropertiesChanged` and `Seeked`.
 
@@ -189,8 +190,9 @@ itself (see Gotchas).
   too); placement is the OSD's `MonitorConstraint`. The only layout of our own
   is `CentredRowLayout`, which keeps the transport buttons centred however long
   the title is. Look for the shell's widget first.
-- **Motion copies the shell.** `anim.js` holds the only durations: 200 ms
-  ease-out-quad arriving (the bar rises 8 px as it fades in), 120 ms leaving.
+- **Motion sits beside the shell's.** `anim.js` holds the only durations:
+  200 ms arriving (the bar rises 8 px as it fades in), 120 ms leaving, both
+  ease-out-quad — the shell's curve, at lengths inside its own 100–250 ms.
   `actor.ease()` honours the animations toggle and slow-down factor.
 - **Every size is in em** (1em is the shell's UI font; 0.818em its caption
   step), so the bar follows Large Text and the size setting scales all of it.

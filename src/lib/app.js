@@ -17,9 +17,9 @@
 //   edge (`bottom-edge`); when the `toggle-bar` key is pressed, which also
 //   gives it the keyboard; when a pad button does something; and when the
 //   player pauses, seeks or changes file by itself. It goes after
-//   `hide-delay` seconds unless the pointer is on it, it has the keyboard, a
-//   slider is being dragged, or — with `stay-while-paused` — the player is
-//   paused. The pointer is watched with the shell's PointerWatcher, which
+//   `hide-delay` seconds unless the pointer is on it, it has the keyboard, its
+//   pop-out is open, a slider is being dragged, or — with `stay-while-paused`
+//   — the player is paused. The pointer is watched with the shell's PointerWatcher, which
 //   polls only while the user is active and takes no input away from the
 //   video.
 //
