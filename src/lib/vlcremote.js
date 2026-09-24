@@ -37,6 +37,7 @@ import {SOCKET_PATH} from './vlcconfig.js';
 
 const REPLY_TIMEOUT_MS = 2000;
 const PAUSED = 'Press pause to continue.';
+const encoder = new TextEncoder();
 
 // VLC lists no tracks while paused, and none have been read before.
 export class PausedError extends Error {}
@@ -89,16 +90,15 @@ export class VlcRemote extends EventEmitter {
         this._queue = [];
         this._writes = [];
         this._closed = false;
+        // False once VLC was reached and ours but did not answer — busy
+        // with a connection from before (app.js tries once more).
+        this.answered = null;
         // What VLC last listed while playing: {audio, subtitles, chapter}.
         this._last = null;
         // Where this extension has moved the subtitle timing to, in ms, since
         // the file started. VLC cannot be asked, so a change made with VLC's
         // own keys is not in it; VLC's on-screen message shows the truth.
         this.subtitleDelay = 0;
-    }
-
-    get connected() {
-        return !!this._connection;
     }
 
     // Resolves true once connected to the VLC with process id `pid`. (Not
@@ -169,12 +169,15 @@ export class VlcRemote extends EventEmitter {
         }
         const audio = parseTracks(audioReply);
         const subtitles = parseTracks(await this._command('strack'));
-        let chapter = {current: 0, count: 0};
-        const match = (await this._command('chapter')).join('\n').match(/chapter (\d+)\/(\d+)/);
-        if (match)
-            chapter = {current: Number(match[1]), count: Number(match[2])};
+        const chapter = await this._readChapter();
         this._last = {audio, subtitles, chapter};
         return this._last;
+    }
+
+    // {current, count}, VLC counting from 0; only answered while playing.
+    async _readChapter() {
+        const match = (await this._command('chapter')).join('\n').match(/chapter (\d+)\/(\d+)/);
+        return match ? {current: Number(match[1]), count: Number(match[2])} : {current: 0, count: 0};
     }
 
     setAudio(id) {
@@ -227,13 +230,21 @@ export class VlcRemote extends EventEmitter {
         this._send('key key-subtitle-track');
     }
 
+    // Resolves to the chapter it landed on: VLC's word while playing, the
+    // count moved on by one while paused, when VLC cannot be asked.
     async chapter(delta) {
         const reply = await this._command(delta > 0 ? 'chapter_n' : 'chapter_p');
+        if (!reply.includes(PAUSED)) {
+            const chapter = await this._readChapter();
+            if (this._last)
+                this._last.chapter = chapter;
+            return chapter;
+        }
+        this._send(delta > 0 ? 'key key-chapter-next' : 'key key-chapter-prev');
         const chapter = this._last?.chapter;
-        if (reply.includes(PAUSED))
-            this._send(delta > 0 ? 'key key-chapter-next' : 'key key-chapter-prev');
         if (chapter)
             chapter.current = Math.max(0, Math.min(chapter.count - 1, chapter.current + Math.sign(delta)));
+        return chapter ?? null;
     }
 
     // ------------------------------------------------------------------
@@ -253,7 +264,7 @@ export class VlcRemote extends EventEmitter {
         const text = this._writes[0];
         if (text === undefined || !this._output)
             return;
-        const bytes = new GLib.Bytes(new TextEncoder().encode(`${text}\n`));
+        const bytes = new GLib.Bytes(encoder.encode(`${text}\n`));
         this._output.write_bytes_async(bytes, GLib.PRIORITY_DEFAULT, this._cancellable, (stream, result) => {
             try {
                 stream.write_bytes_finish(result);

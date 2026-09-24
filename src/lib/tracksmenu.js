@@ -159,9 +159,8 @@ export class TracksMenu extends PopupMenu.PopupMenu {
         this._aim();
         this.open(BoxPointer.PopupAnimation.FULL);
         if (focus) {
-            const picked = [...this._audioItems.values()].find(i => i._picked) ??
-                [...this._audioItems.values()][0];
-            picked?.grab_key_focus();
+            const current = state.audio?.find(t => t.current);
+            (this._audioItems.get(current?.id) ?? [...this._audioItems.values()][0])?.grab_key_focus();
         }
     }
 
@@ -189,13 +188,10 @@ export class TracksMenu extends PopupMenu.PopupMenu {
         }
         for (const track of tracks) {
             const item = new PopupMenu.PopupMenuItem(track.label);
-            item._picked = track.current;
             item.setOrnament(track.current ? PICKED : UNPICKED);
             item.connect('activate', () => {
-                for (const other of items.values()) {
-                    other._picked = other === item;
-                    other.setOrnament(other._picked ? PICKED : UNPICKED);
-                }
+                for (const other of items.values())
+                    other.setOrnament(other === item ? PICKED : UNPICKED);
                 choose(track.id);
             });
             section.addMenuItem(item);
@@ -228,10 +224,11 @@ export class TracksMenu extends PopupMenu.PopupMenu {
 
     async _chapter(delta) {
         try {
-            await this._remote?.chapter(delta);
-            const {chapter} = await this._remote.state();
-            this._chapterState = chapter;
-            this._syncChapter();
+            const chapter = await this._remote?.chapter(delta);
+            if (chapter) {
+                this._chapterState = chapter;
+                this._syncChapter();
+            }
         } catch (e) {
             // The player went; the menu goes with the bar.
         }
