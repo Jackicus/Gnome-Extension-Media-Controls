@@ -6,6 +6,7 @@ import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
 
 import {ACTIONS, BUTTONS, buttonForCode, playerNames} from './lib/actions.js';
+import {readVlcState, vlcrcPath, writeVlcState} from './lib/vlcconfig.js';
 
 const MPRIS_NAMESPACE = 'org.mpris.MediaPlayer2';
 const MPRIS_PATH = '/org/mpris/MediaPlayer2';
@@ -52,7 +53,7 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
         const cleanup = new Cleanup(window);
-        window.set_default_size(640, 720);
+        window.set_default_size(640, 800);
         window.add(this._barPage(window, settings, cleanup));
         window.add(this._playersPage(settings, cleanup));
         window.add(this._controllersPage(settings, cleanup));
@@ -98,12 +99,51 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
 
         showing.add(this._shortcutRow(window, settings, cleanup, 'toggle-bar'));
 
+        const look = new Adw.PreferencesGroup({title: 'On the bar'});
+        page.add(look);
+        look.add(this._scaleRow(settings));
+        const clockRow = new Adw.SwitchRow({
+            title: 'Show the time and when it ends',
+            subtitle: 'A line under the title: the time now, and when the video will finish',
+        });
+        settings.bind('show-clock', clockRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+        look.add(clockRow);
+        const sleepRow = new Adw.SwitchRow({
+            title: 'Sleep timer',
+            subtitle: 'A button that pauses after 15 minutes to 2 hours, or at the end of the file',
+        });
+        settings.bind('sleep-timer', sleepRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+        look.add(sleepRow);
+
         const steps = new Adw.PreferencesGroup({title: 'Steps'});
         page.add(steps);
         steps.add(this._spinRow(settings, 'seek-step', 'Skip back and forward by', 'seconds', 1, 300));
         steps.add(this._spinRow(settings, 'volume-step', 'Change the volume by', 'percent', 1, 25));
 
         return page;
+    }
+
+    // The bar's size, as a slider: the whole bar and its pop-out scale
+    // together, for a television across the room.
+    _scaleRow(settings) {
+        const row = new Adw.ActionRow({
+            title: 'Size',
+            subtitle: 'Larger for a screen seen from across the room',
+        });
+        const scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 75, 200, 5);
+        scale.set({
+            width_request: 220,
+            valign: Gtk.Align.CENTER,
+            draw_value: true,
+            value_pos: Gtk.PositionType.LEFT,
+            digits: 0,
+        });
+        scale.set_format_value_func((_scale, value) => `${Math.round(value)}%`);
+        for (const mark of [100, 150, 200])
+            scale.add_mark(mark, Gtk.PositionType.BOTTOM, null);
+        settings.bind('bar-scale', scale.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
+        row.add_suffix(scale);
+        return row;
     }
 
     _spinRow(settings, key, title, subtitle, min, max) {
@@ -187,6 +227,8 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             description: 'Media players that speak MPRIS. The bar appears over the one whose fullscreen window has focus. VLC needs its D-Bus control on (--dbus); mpv needs mpv-mpris.',
         });
         page.add(running);
+        page.add(this._vlcGroup());
+
         const ignoredGroup = new Adw.PreferencesGroup({title: 'Never shown over'});
         page.add(ignoredGroup);
         const ignoredExpander = new Adw.ExpanderRow({
@@ -347,6 +389,51 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         return page;
     }
 
+    // VLC's own settings file, for the two things only it can be told
+    // (lib/vlcconfig.js): to keep its controller out of the way, and to open
+    // the socket the tracks pop-out talks to.
+    _vlcGroup() {
+        const group = new Adw.PreferencesGroup({
+            title: 'VLC',
+            description: 'These change VLC\'s own settings, and apply from the next time VLC starts.',
+        });
+        const state = readVlcState();
+        const hide = new Adw.SwitchRow({
+            title: 'Hide VLC\'s own fullscreen controls',
+            subtitle: 'So the bar is the only one over the video, however VLC was opened',
+            active: state.hideControls,
+        });
+        const tracks = new Adw.SwitchRow({
+            title: 'Audio and subtitle tracks',
+            subtitle: 'Lets the bar list and switch VLC\'s tracks and fix subtitle timing, over a private socket',
+            active: state.trackControl,
+        });
+        const failed = new Adw.ActionRow({title: 'Could not change VLC\'s settings', visible: false});
+        const write = changes => {
+            try {
+                const now = writeVlcState(changes);
+                hide.active = now.hideControls;
+                tracks.active = now.trackControl;
+                failed.visible = false;
+            } catch (e) {
+                failed.subtitle = GLib.markup_escape_text(`${vlcrcPath()}: ${e.message}`, -1);
+                failed.visible = true;
+            }
+        };
+        hide.connect('notify::active', () => {
+            if (hide.active !== readVlcState().hideControls)
+                write({hideControls: hide.active});
+        });
+        tracks.connect('notify::active', () => {
+            if (tracks.active !== readVlcState().trackControl)
+                write({trackControl: tracks.active});
+        });
+        group.add(hide);
+        group.add(tracks);
+        group.add(failed);
+        return group;
+    }
+
     // ------------------------------------------------------------------
     // Controllers
     // ------------------------------------------------------------------
@@ -369,7 +456,7 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
 
         const buttons = new Adw.PreferencesGroup({
             title: 'Buttons',
-            description: 'Named by where they sit, since the letters on them differ between makers.',
+            description: 'Named by where they sit, since the letters on them differ between makers. After "Move around the bar" (Start, to begin with), the d-pad moves the highlight, the bottom button presses and the right one goes back.',
         });
         const resetButtons = new Gtk.Button({
             label: 'Reset',

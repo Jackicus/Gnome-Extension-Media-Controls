@@ -123,6 +123,11 @@ export class Player extends EventEmitter {
         this._call(PLAYER, 'PlayPause');
     }
 
+    pause() {
+        if (this.playing)
+            this._call(PLAYER, 'Pause');
+    }
+
     next() {
         if (this.canGoNext)
             this._call(PLAYER, 'Next');

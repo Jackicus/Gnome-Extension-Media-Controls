@@ -4,7 +4,9 @@
 // was plugged in onto the kernel's standard buttons with the SDL controller
 // database, so an Xbox, PlayStation, Switch or 8BitDo pad all press the same
 // `BTN_SOUTH`. Which action a button performs is the `gamepad-buttons`
-// setting, keyed by the ids in actions.js BUTTONS.
+// setting, keyed by the ids in actions.js BUTTONS; every press of a known
+// button is handed on with its id as well, since while the bar holds the
+// focus the d-pad and the face buttons move around it instead (app.js).
 //
 // Pads are never grabbed: a game running beside the player still sees every
 // press. The actions only reach a player when app.js has one attached — a
@@ -84,7 +86,6 @@ export class Gamepads {
         if (!button)
             return;
         const action = this._settings.get_value('gamepad-buttons').deep_unpack()[button.id] ?? 'none';
-        if (action !== 'none')
-            this._onButton(action);
+        this._onButton(button.id, action);
     }
 }

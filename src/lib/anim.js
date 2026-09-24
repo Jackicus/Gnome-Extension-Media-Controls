@@ -1,5 +1,5 @@
-// Motion vocabulary, the same steps Media Libraries uses: tuned to sit beside
-// the shell's own 250 ms ease-out-quad rather than copied from it. These are
+// Motion vocabulary: steps tuned to sit beside the shell's own 250 ms
+// ease-out-quad rather than copied from it. These are
 // the only durations and curves in use; actor.ease() already honours the
 // animations toggle and the slow-down factor, so nothing here checks them.
 

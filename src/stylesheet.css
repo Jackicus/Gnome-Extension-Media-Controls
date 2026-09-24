@@ -8,26 +8,33 @@
  *
  * Colour comes from the accent: -st-accent-color / -st-accent-fg-color with
  * st-lighten(), st-mix() and st-transparentize(), exactly as gnome-shell.css
- * does. Type is in em, so it follows Settings → Accessibility → Large Text;
- * 1em is the shell's UI font, and 0.818em is its caption step.
+ * does.
+ *
+ * Every size is in em. 1em is the shell's UI font (0.818em its caption
+ * step), so the bar follows Large Text — and the bar-scale setting is one
+ * font-size on the panel (bar.js setScale), which scales all of it at once.
+ * A px size here would stay put while everything around it grew; only
+ * hairline borders and shadows are px. Icon sizes are the exception the other
+ * way: St sizes a button's icon against the theme rather than the panel's
+ * font, so bar.js sets them itself (ICON_SIZE × the setting).
  */
 
 .mc-bar {
     color: #ffffff;
     background-color: st-transparentize(#2e2e33, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 28px;
-    padding: 12px 18px 10px;
+    border-radius: 1.909em;
+    padding: 0.818em 1.227em 0.682em;
     margin-bottom: 2em;
-    spacing: 4px;
+    spacing: 0.273em;
     box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.4);
 }
 
 /* ---- Position ---------------------------------------------------------- */
 
 .mc-seek-row {
-    spacing: 12px;
-    padding: 0 6px;
+    spacing: 0.818em;
+    padding: 0 0.409em;
 }
 
 .mc-time {
@@ -48,7 +55,7 @@
 
 .mc-bar .slider {
     color: #ffffff;
-    -barlevel-height: 4px;
+    -barlevel-height: 0.273em;
     -barlevel-background-color: rgba(255, 255, 255, 0.15);
     -barlevel-active-background-color: -st-accent-color;
 }
@@ -58,8 +65,10 @@
     -barlevel-active-background-color: rgba(255, 255, 255, 0.4);
 }
 
+/* The slider's handle carries the focus: a ring would be lost on a thin bar. */
 .mc-bar .slider:focus {
-    color: st-lighten(-st-accent-color, 20%);
+    color: st-lighten(-st-accent-color, 25%);
+    -barlevel-background-color: rgba(255, 255, 255, 0.28);
 }
 
 .mc-seek {
@@ -68,18 +77,18 @@
 
 .mc-volume {
     width: 6em;
-    margin: 0 6px 0 0;
+    margin: 0 0.409em 0 0;
 }
 
 /* ---- Buttons ----------------------------------------------------------- */
 
 .mc-control-row {
-    padding: 0 2px;
+    padding: 0 0.136em;
 }
 
 .mc-transport,
 .mc-extras {
-    spacing: 4px;
+    spacing: 0.273em;
 }
 
 /* The shell's round icon-button, flat until hovered, as the media player in
@@ -97,9 +106,11 @@
     background-color: rgba(255, 255, 255, 0.16);
 }
 
+/* The highlight the keyboard and the pad move around: the accent, strong
+ * enough to find from the sofa. */
 .mc-bar .mc-button:focus {
-    background-color: rgba(255, 255, 255, 0.1);
-    box-shadow: inset 0 0 0 2px st-transparentize(st-mix(-st-accent-color, #ffffff, 60%), 0.2);
+    background-color: st-transparentize(-st-accent-color, 0.7);
+    box-shadow: inset 0 0 0 2px -st-accent-color;
 }
 
 .mc-bar .mc-button:insensitive {
@@ -111,11 +122,7 @@
     color: -st-accent-fg-color;
     background-color: -st-accent-color;
     padding: 0.95em;
-    margin: 0 6px;
-}
-
-.mc-bar .mc-play StIcon {
-    icon-size: 1.364em;
+    margin: 0 0.409em;
 }
 
 .mc-bar .mc-play:hover {
@@ -125,7 +132,7 @@
 /* The accent fill hides the usual focus tint, so the ring is white here. */
 .mc-bar .mc-play:focus {
     background-color: st-lighten(-st-accent-color, 6%);
-    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.85);
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.9);
 }
 
 .mc-bar .mc-play:active {
@@ -140,11 +147,25 @@
     min-width: 2.6em;
 }
 
+.mc-bar .mc-sleep {
+    padding: 0.818em;
+}
+
+.mc-sleep-box {
+    spacing: 0.409em;
+}
+
+.mc-sleep-label {
+    font-size: 0.818em;
+    font-weight: bold;
+    font-feature-settings: "tnum";
+}
+
 /* ---- Title ------------------------------------------------------------- */
 
 .mc-info {
-    spacing: 1px;
-    padding-left: 6px;
+    spacing: 0.068em;
+    padding-left: 0.409em;
 }
 
 .mc-title {
@@ -154,4 +175,26 @@
 .mc-subtitle {
     font-size: 0.818em;
     color: rgba(255, 255, 255, 0.7);
+}
+
+.mc-clock {
+    font-feature-settings: "tnum";
+}
+
+/* ---- Audio and subtitles pop-out --------------------------------------- */
+/* The shell's own popup menu; only the button rows inside it are ours. */
+
+.mc-menu-row {
+    spacing: 0.409em;
+}
+
+.mc-menu-button {
+    padding: 0.545em;
+}
+
+
+.mc-menu-value {
+    font-feature-settings: "tnum";
+    min-width: 3.6em;
+    text-align: center;
 }

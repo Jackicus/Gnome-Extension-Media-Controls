@@ -1,6 +1,8 @@
 // The bar itself: a panel at the foot of the player's monitor, holding the
-// position, the transport buttons, the volume and the rate. It knows how to
-// show a player and how to ask it for things; when to be seen is app.js's.
+// position, the transport buttons, the volume and the rate — and, where the
+// player allows it, the audio-and-subtitles pop-out (tracksmenu.js), and the
+// clock and sleep timer when they are switched on. It knows how to show a
+// player and how to ask it for things; when to be seen is app.js's.
 //
 // Everything in it is the shell's: the seek and volume sliders are the quick
 // settings' `Slider`, the buttons are `icon-button`s, the panel is painted the
@@ -17,10 +19,12 @@ import St from 'gi://St';
 
 import * as Layout from 'resource:///org/gnome/shell/ui/layout.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Slider} from 'resource:///org/gnome/shell/ui/slider.js';
 
 import {RATES, formatTime} from './actions.js';
 import {Duration, Ease, RISE} from './anim.js';
+import {TracksMenu} from './tracksmenu.js';
 
 // The bar's width: most of a small monitor, capped on a large one so the
 // slider stays a comfortable reach. Logical px.
@@ -28,6 +32,11 @@ const MAX_WIDTH = 960;
 const SIDE_MARGIN = 32;
 // How often the running time is redrawn while the bar is up and playing.
 const TICK_MS = 250;
+// Icon sizes at 100%, logical px: the shell's icon-button size, and the
+// play button's larger one. The size setting multiplies them in JS, since St
+// sizes a button's icon against the theme, not the panel's font size.
+export const ICON_SIZE = 16;
+const PLAY_ICON_SIZE = 22;
 
 const scaleFactor = () => St.ThemeContext.get_for_stage(global.stage).scale_factor;
 
@@ -46,14 +55,10 @@ function setUnredirect(allowed) {
     }
 }
 
-const DIRECTIONS = new Map([
-    [Clutter.KEY_Left, St.DirectionType.LEFT],
-    [Clutter.KEY_Right, St.DirectionType.RIGHT],
-    [Clutter.KEY_Up, St.DirectionType.UP],
-    [Clutter.KEY_Down, St.DirectionType.DOWN],
-    [Clutter.KEY_Tab, St.DirectionType.TAB_FORWARD],
-    [Clutter.KEY_ISO_Left_Tab, St.DirectionType.TAB_BACKWARD],
-]);
+// "21:40" or "9:40 PM", as the top bar's clock is set to.
+function clockTime(dateTime, format) {
+    return dateTime.format(format === '12h' ? '%l:%M %p' : '%H:%M').trim();
+}
 
 // [start | centre | end], with the centre on the middle of the row whatever
 // the sides hold and the sides sharing what is left — so the transport
@@ -61,6 +66,12 @@ const DIRECTIONS = new Map([
 // rather than pushing them over.
 const CentredRowLayout = GObject.registerClass(
 class CentredRowLayout extends Clutter.LayoutManager {
+    _init() {
+        super._init();
+        // The bar's size setting, as a factor.
+        this.scale = 1;
+    }
+
     vfunc_get_preferred_width(container, forHeight) {
         const [start, centre, end] = container.get_children();
         const [cMin, cNat] = centre.get_preferred_width(forHeight);
@@ -83,7 +94,7 @@ class CentredRowLayout extends Clutter.LayoutManager {
         const [start, centre, end] = container.get_children();
         const width = box.get_width();
         const height = box.get_height();
-        const gap = 12 * scaleFactor();
+        const gap = 12 * scaleFactor() * this.scale;
         const [, cNat] = centre.get_preferred_width(height);
         const cWidth = Math.min(cNat, width);
         const cX = Math.round((width - cWidth) / 2);
@@ -152,6 +163,10 @@ export const ControlBar = GObject.registerClass({
         this._volumeDragging = false;
         this._tickId = 0;
         this._unredirectOff = false;
+        this._scale = 1;
+        this._monitorIndex = 0;
+        this._clockFormat = null;       // null: no clock line
+        this._sleepText = null;         // null: no sleep button
 
         this.panel = new St.BoxLayout({
             style_class: 'mc-bar',
@@ -162,10 +177,10 @@ export const ControlBar = GObject.registerClass({
         this.add_child(this.panel);
         // Arrow keys walk the panel's buttons while it holds the keyboard.
         // The focus manager does that from the stage, which a key never
-        // reaches while the panel holds the grab, so the panel moves the
-        // focus itself — as the shell's popup menu items do. A slider that
-        // has the focus takes Left and Right first (seek, volume); Up and
-        // Down leave it.
+        // reaches while the panel holds the grab, so the panel asks it to
+        // navigate from the event itself — as the shell's popup menu items
+        // do. A slider that has the focus takes Left and Right first (seek,
+        // volume); Up and Down leave it.
         global.focus_manager.add_group(this.panel);
         this.panel.connect('key-press-event', (_actor, event) => {
             const key = event.get_key_symbol();
@@ -173,16 +188,30 @@ export const ControlBar = GObject.registerClass({
                 this.emit('action', 'hide-bar');
                 return Clutter.EVENT_STOP;
             }
-            const direction = DIRECTIONS.get(key);
-            if (direction === undefined)
-                return Clutter.EVENT_PROPAGATE;
-            const wrap = direction === St.DirectionType.TAB_FORWARD || direction === St.DirectionType.TAB_BACKWARD;
-            this.panel.navigate_focus(global.stage.get_key_focus(), direction, wrap);
-            return Clutter.EVENT_STOP;
+            if (global.focus_manager.navigate_from_event(event))
+                return Clutter.EVENT_STOP;
+            // The pop-out's menu has the panel for its source, and a menu
+            // toggles on Return or Space reaching its source: a button has
+            // taken those already, so what gets here (from a slider) stops.
+            if (key === Clutter.KEY_Return || key === Clutter.KEY_KP_Enter || key === Clutter.KEY_space)
+                return Clutter.EVENT_STOP;
+            return Clutter.EVENT_PROPAGATE;
         });
 
         this._buildSeekRow();
         this._buildControlRow();
+
+        // Every icon the size setting scales, with its size at 100%.
+        this._icons = [
+            ...[this._previous, this._back, this._forward, this._next, this._tracks, this._mute, this._close]
+                .map(button => [button.child, ICON_SIZE]),
+            [this._play.child, PLAY_ICON_SIZE],
+            [this._sleepIcon, ICON_SIZE],
+        ];
+
+        this.tracksMenu = new TracksMenu(this.panel, this._tracks);
+        this._menuManager = new PopupMenu.PopupMenuManager(this.panel);
+        this._menuManager.addMenu(this.tracksMenu);
         this.connect('destroy', () => this._onDestroy());
     }
 
@@ -192,6 +221,10 @@ export const ControlBar = GObject.registerClass({
 
     get hovered() {
         return this.panel.hover;
+    }
+
+    get menuOpen() {
+        return this.tracksMenu.isOpen;
     }
 
     // ------------------------------------------------------------------
@@ -245,9 +278,10 @@ export const ControlBar = GObject.registerClass({
     }
 
     _buildControlRow() {
+        this._rowLayout = new CentredRowLayout();
         const row = new St.Widget({
             style_class: 'mc-control-row',
-            layout_manager: new CentredRowLayout(),
+            layout_manager: this._rowLayout,
             x_expand: true,
         });
 
@@ -258,7 +292,8 @@ export const ControlBar = GObject.registerClass({
         });
         this._title = new St.Label({style_class: 'mc-title'});
         this._subtitle = new St.Label({style_class: 'mc-subtitle'});
-        for (const label of [this._title, this._subtitle]) {
+        this._clock = new St.Label({style_class: 'mc-subtitle mc-clock', visible: false});
+        for (const label of [this._title, this._subtitle, this._clock]) {
             label.clutter_text.ellipsize = Pango.EllipsizeMode.END;
             info.add_child(label);
         }
@@ -279,6 +314,25 @@ export const ControlBar = GObject.registerClass({
         }
 
         const extras = new St.BoxLayout({style_class: 'mc-extras', y_align: Clutter.ActorAlign.CENTER});
+        // Only where the player can be asked for its tracks (app.js
+        // setRemote); the pop-out hangs off it.
+        this._tracks = iconButton('media-view-subtitles-symbolic', 'Audio and subtitles');
+        this._tracks.visible = false;
+        this._tracks.connect('clicked', () => this.emit('action', 'tracks'));
+        this._sleep = new St.Button({
+            style_class: 'icon-button mc-button mc-sleep',
+            accessible_name: 'Sleep timer',
+            can_focus: true,
+            visible: false,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        const sleepBox = new St.BoxLayout({style_class: 'mc-sleep-box'});
+        this._sleepIcon = new St.Icon({icon_name: 'weather-clear-night-symbolic', style_class: 'mc-sleep-icon'});
+        sleepBox.add_child(this._sleepIcon);
+        this._sleepLabel = new St.Label({style_class: 'mc-sleep-label', y_align: Clutter.ActorAlign.CENTER});
+        sleepBox.add_child(this._sleepLabel);
+        this._sleep.set_child(sleepBox);
+        this._sleep.connect('clicked', () => this.emit('action', 'sleep-timer'));
         this._mute = iconButton('audio-volume-high-symbolic', 'Mute');
         this._mute.connect('clicked', () => this.emit('action', 'mute'));
         this._volume = new Slider(1);
@@ -306,7 +360,7 @@ export const ControlBar = GObject.registerClass({
         this._rate.connect('clicked', () => this._cycleRate());
         this._close = iconButton('window-close-symbolic', 'Close the player');
         this._close.connect('clicked', () => this.emit('action', 'quit'));
-        for (const child of [this._mute, this._volume, this._rate, this._close])
+        for (const child of [this._tracks, this._sleep, this._mute, this._volume, this._rate, this._close])
             extras.add_child(child);
 
         row.add_child(info);
@@ -332,9 +386,59 @@ export const ControlBar = GObject.registerClass({
         const monitor = Main.layoutManager.monitors[index];
         if (!monitor)
             return;
+        this._monitorIndex = index;
         this._constraint.index = index;
         const scale = scaleFactor();
-        this.panel.width = Math.min(monitor.width - 2 * SIDE_MARGIN * scale, MAX_WIDTH * scale);
+        this.panel.width = Math.min(monitor.width - 2 * SIDE_MARGIN * scale, MAX_WIDTH * scale * this._scale);
+    }
+
+    // The size setting, in percent. Every size in the stylesheet is in em,
+    // so one font size on the panel scales the lot; the pop-out follows.
+    setScale(percent) {
+        this._scale = percent / 100;
+        const style = percent === 100 ? null : `font-size: ${percent}%;`;
+        this.panel.style = style;
+        this.tracksMenu.actor.style = style;
+        this._rowLayout.scale = this._scale;
+        this._rowLayout.layout_changed();
+        for (const [icon, size] of this._icons)
+            icon.icon_size = Math.round(size * this._scale);
+        this.tracksMenu.setIconSize(Math.round(ICON_SIZE * this._scale));
+        this.setMonitor(this._monitorIndex);
+    }
+
+    // The tracks button and its pop-out, for a player that can be asked
+    // (a VlcRemote), or neither.
+    setRemote(remote) {
+        this._tracks.visible = !!remote;
+        this.tracksMenu.setRemote(remote);
+    }
+
+    openTracks({focus = false} = {}) {
+        if (!this._tracks.visible)
+            return;
+        if (this.tracksMenu.isOpen)
+            this.tracksMenu.close();
+        else
+            this.tracksMenu.openFresh({focus});
+    }
+
+    // The clock line under the title — '24h' or '12h', as the top bar's is —
+    // or null for none.
+    setClock(format) {
+        this._clockFormat = format;
+        this._clock.visible = !!format;
+        this._tick();
+        this._updateTicking();
+    }
+
+    // The sleep timer button, labelled by `text()` as it runs; null for no
+    // button at all.
+    setSleep(text) {
+        this._sleepText = text;
+        this._sleep.visible = !!text;
+        this._tick();
+        this._updateTicking();
     }
 
     sync() {
@@ -376,6 +480,18 @@ export const ControlBar = GObject.registerClass({
         const at = this._seeking ? this._seek.value * p.length : p.now;
         this._elapsed.text = formatTime(at);
         this._remaining.text = p.length ? `−${formatTime(p.length - at)}` : '';
+        if (this._clockFormat) {
+            const now = GLib.DateTime.new_now_local();
+            const left = p.length ? (p.length - at) / (p.rate || 1) : 0;
+            this._clock.text = left
+                ? `${clockTime(now, this._clockFormat)} · ends at ${clockTime(now.add_seconds(left), this._clockFormat)}`
+                : clockTime(now, this._clockFormat);
+        }
+        if (this._sleepText) {
+            const text = this._sleepText();
+            this._sleepLabel.text = text;
+            this._sleepLabel.visible = !!text;
+        }
         if (!this._seeking) {
             this._syncing = true;
             this._seek.value = p.length ? Math.min(1, at / p.length) : 0;
@@ -383,9 +499,10 @@ export const ControlBar = GObject.registerClass({
         }
     }
 
-    // A timer only while there is a running time to show moving.
+    // A timer only while there is something on the bar that moves: the
+    // running time, the clock, the sleep timer's countdown.
     _updateTicking() {
-        const want = this.visible && !!this._player?.playing;
+        const want = this.visible && (!!this._player?.playing || !!this._clockFormat || !!this._sleepText);
         if (want && !this._tickId) {
             this._tickId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, TICK_MS, () => {
                 this._tick();
@@ -441,6 +558,7 @@ export const ControlBar = GObject.registerClass({
         if (!this.visible)
             return;
         this.remove_all_transitions();
+        this.tracksMenu.close();
         const done = () => {
             this.hide();
             this.opacity = 0;
@@ -469,6 +587,7 @@ export const ControlBar = GObject.registerClass({
     }
 
     _onDestroy() {
+        this.tracksMenu.destroy();
         this._player?.disconnectObject(this);
         this._player = null;
         if (this._tickId) {

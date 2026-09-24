@@ -24,8 +24,36 @@ export const ACTIONS = [
     {id: 'faster', title: 'Faster'},
     {id: 'show-bar', title: 'Show the bar'},
     {id: 'hide-bar', title: 'Hide the bar'},
+    // Opens the bar holding the keyboard and the pad: the d-pad then moves
+    // the highlight, the bottom button presses, the right one goes back.
+    {id: 'navigate', title: 'Move around the bar'},
+    {id: 'tracks', title: 'Audio and subtitles'},
+    {id: 'cycle-audio', title: 'Next audio track'},
+    {id: 'cycle-subtitles', title: 'Next subtitle track'},
+    {id: 'subtitles-earlier', title: 'Subtitles earlier'},
+    {id: 'subtitles-later', title: 'Subtitles later'},
+    {id: 'sleep-timer', title: 'Sleep timer'},
     {id: 'quit', title: 'Close the player'},
 ];
+
+// While the bar holds the focus, these buttons move around it instead of
+// doing what they are set to — the keys they stand for are what a keyboard
+// would press.
+export const NAVIGATION = {
+    'dpad-up': 'Up',
+    'dpad-down': 'Down',
+    'dpad-left': 'Left',
+    'dpad-right': 'Right',
+    'south': 'Return',
+    'east': 'Escape',
+};
+
+// The sleep timer's steps, in minutes, and then the end of the file; one more
+// press turns it off.
+export const SLEEP_STEPS = [15, 30, 45, 60, 90, 120, 'end'];
+
+// How far one press of Subtitles earlier/later moves them, in ms.
+export const SUBTITLE_SHIFT_MS = 100;
 
 export const BUTTONS = [
     {id: 'south', code: 0x130, title: 'Bottom face button', hint: 'A · Cross · B on Nintendo'},

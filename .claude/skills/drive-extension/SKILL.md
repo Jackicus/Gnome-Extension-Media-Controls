@@ -44,7 +44,7 @@ showing a pause is not the player pausing.
 
 | Command | Does |
 |---|---|
-| `player [--qt] [--windowed] [FILE] [-- VLC ARGS]` | VLC in the nested session: cvlc by default, `--qt` for the Qt interface; full screen unless `--windowed`. No FILE = the generated 10-minute test pattern with its running time burned in, so a shot shows where playback really is. Run it twice for two players. |
+| `player [--qt] [--windowed] [--plain] [FILE] [-- VLC ARGS]` | VLC in the nested session: cvlc by default, `--qt` for the Qt interface; full screen unless `--windowed`. No FILE = the generated 10-minute test pattern: running time burned in, audio Japanese/English, subtitles English "Second N"/Spanish "Segundo N" (one a second, so timing shows), a chapter every 2 min. Its throwaway vlcrc gets the tracks socket (the preferences' own code) unless `--plain`, which is how to check a VLC with no tracks button. Run it twice for two players. |
 | `mpris` | The first player's PlaybackStatus, Position (µs), Volume, Rate, title |
 | `mpris get PROP` / `set PROP '<VALUE>'` / `METHOD [ARGS]` / `Quit` | Poke it directly (`set Volume '<0.8>'`, `PlayPause`, `Quit`) |
 | `pad [HOLD] BUTTON...` | Plug in a virtual Xbox 360 pad, wait HOLD s (default 1.5) for libmanette to open it, press each BUTTON, unplug. Buttons are the `gamepad-buttons` ids: `south` `east` `west` `north` `dpad-left` `dpad-right` `dpad-up` `dpad-down` `left-shoulder` `right-shoulder` `left-trigger` `right-trigger` `select` `start` `mode` `left-stick` `right-stick`, plus `wait:SECS`. |
@@ -54,6 +54,11 @@ showing a pause is not the player pausing.
 
 ## Reading the screen (1600×900)
 
+- **VLC's socket, directly:** while the extension is attached it holds VLC's
+  one connection, so a `python3` probe of the socket hangs. Test the protocol
+  on a headless VLC of your own instead (`cvlc -I dummy --extraintf oldrc
+  --rc-fake-tty --rc-unix=$XDG_RUNTIME_DIR/<short>.sock --vout=dummy
+  --aout=dummy --no-dbus FILE`, and kill it by pid).
 - **Showing the bar:** two `move`s to different points over the player
   (`pointer-reveal` `anywhere`) — the pointer watcher only reacts to a change.
   With `bottom-edge`, the moves must land below y ≈ 720. It hides
@@ -61,11 +66,23 @@ showing a pause is not the player pausing.
 - **The bar:** panel `320,780` to `1280,872`; crop shots to `300 760 1000 140`.
   Seek slider on y ≈ 803 from x ≈ 405 to 1195 — `click 800 803` is the middle
   of the clip. Transport on y ≈ 840: previous 708, skip back 750, **play 799**,
-  skip forward 850, next 891. Mute 1057, volume slider 1080–1160, rate 1194,
-  **close 1240** (quits the player).
+  skip forward 850, next 891. **Tracks 1018** (when VLC's socket answered —
+  give it ~3 s after `player` or a `reload`), mute 1057, volume slider
+  1080–1160, rate 1194, **close 1240** (quits the player). At another
+  `bar-scale`, or with the sleep button on, read positions off a `shot` first.
+- **The pop-out** (`click 1018 841`) stands above the bar centred on the
+  tracks button, x ≈ 900–1140; its height depends on the file (the default
+  clip's chapters add a row), so `shot` it and read the item rows off that
+  before clicking one. Picking keeps it open. Opened with the mouse it needs
+  one Escape; the next Escape goes to VLC (which leaves fullscreen).
 - **Keyboard mode:** `key Super+c` opens it holding the keyboard with play
   focused; `Right`/`Left`/`Up`/`Down` move the focus, `Return` presses,
-  `Escape` closes. Keep the keys of one walk in one `do`.
+  `Escape` backs out a level. Keep the keys of one walk in one `do`.
+- **Pad mode:** `pad start` does the same as Super+C; then `dpad-*`, `south`
+  (press) and `east` (back) are the arrow keys, Return and Escape. `pad north`
+  opens the pop-out with the current audio track focused. Each `pad` call plugs
+  a fresh pad in (1.5 s), so for a walk with shots in between, open with `pad`
+  and continue with `key` steps — the path is the same.
 - **Preferences** (after `run gnome-extensions prefs media-controls@jackt`,
   `wait 2.5`): a 640×720 window, centred in the work area — so where it lands
   depends on the panels loaded. Under `--clean` (stock top bar) its tabs are
@@ -123,5 +140,5 @@ to `extension.js`, `metadata.json` or the schema *need* one.
 - **`Eval` is blocked** in the nested shell; drive it with input and D-Bus like a
   user would. Screenshots and banners borrow `org.gnome.SettingsDaemon.MediaKeys`
   on the throwaway bus; never try that on the real one.
-- **Other extensions load too** (the nested shell reads the real enabled list):
-  Dash to Panel, Media Libraries, Wallpaper Engine and their log lines.
+- **Other extensions load too** without `--clean` (the nested shell reads the
+  real enabled list): their top-bar icons and log lines appear alongside.

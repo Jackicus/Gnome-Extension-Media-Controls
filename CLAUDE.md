@@ -3,14 +3,14 @@
 A GNOME Shell extension (UUID `media-controls@jackt`) that draws a control bar
 over a **fullscreen video player** — a replacement for VLC's own fullscreen
 controller that works the same way over mpv, Celluloid or anything else that
-speaks MPRIS. It is a bar the shell draws over the player's window, not a
+speaks MPRIS, and that for VLC adds audio and subtitle tracks, subtitle timing
+and chapters. It is a bar the shell draws over the player's window, not a
 player. Shell versions 48 to 50 (50 by boot, 48 and 49 by audit against the
 shell's sources — see Gotchas). GJS, ES modules.
 
-It came out of Media Libraries (`~/Projects/Gnome-Extension-Media-Libraries`)
-but shares nothing with it and does not depend on it. Media Libraries follows
-playback over MPRIS for its watched marks and resume; this one drives the
-player. Neither duplicates the other, and both can run at once.
+It stands alone: it depends on no other extension and knows of none. If another
+extension has trouble working beside it, that is fixed in that extension's own
+project.
 
 ## Seeing it
 
@@ -19,20 +19,21 @@ looking at it. `make nested` starts a **headless nested GNOME Shell**, loads the
 extension into it, and opens a **live mirror window on the real desktop** (a
 PipeWire screencast of the nested monitor) so the user can watch without logging
 out. `./scripts/nested.sh player` plays a generated test clip in VLC inside it,
-full screen; `mpris` reads or pokes that player; `pad` plugs in a virtual Xbox
-pad and presses buttons on it. **`start --clean`** gives it a settings database
-of its own — only this extension enabled, the real session's look (colour
-scheme, accent, fonts) copied in, nothing written to `~/.config/dconf/user` —
-which is what screenshots are taken in (`docs/screenshots/`, with the `window`
-step for the preferences) and what to use whenever another project's nested
-shell is up.
+full screen — ten minutes of bars with two audio tracks, two subtitle tracks and
+chapters, so the tracks pop-out has something to show; `mpris` reads or pokes
+that player; `pad` plugs in a virtual Xbox pad and presses buttons on it.
+**`start --clean`** gives it a settings database of its own — only this
+extension enabled, the real session's look (colour scheme, accent, fonts) copied
+in, nothing written to `~/.config/dconf/user` — which is what screenshots are
+taken in (`docs/screenshots/`, with the `window` step for the preferences) and
+what to use whenever another project's nested shell is up.
 
 Read the **`drive-extension` skill** before driving it; it has the lifecycle,
 the coordinates and the traps. Keep one nested shell up across edits and
 `reload` into it; `make nested-stop` tears it down — **always** do that when
 finished, and read what it prints: it checks that nothing of the nested session
-survived (a prefs window kept Media Libraries' nested shell alive after a
-`stop` that reported success) and says so if something did.
+survived (a prefs window once kept a nested shell alive after a `stop` that
+reported success) and says so if something did.
 
 All `make` targets delegate to `scripts/`: `dev.sh` for the extension itself and
 `nested.sh` for the nested shell. Put new logic in those, not in the Makefile.
@@ -45,31 +46,37 @@ libmanette sees — the same two lists the preferences show.
 symlinks it). Add a file to `src/` and it ships.
 
 ```
-src/extension.js     loader: stages lib/ under $XDG_RUNTIME_DIR/media-controls/
-src/lib/app.js       which player, when the bar is seen, the key, perform(action)
-src/lib/mpris.js     PlayerRegistry + Player: the players on the bus, their
-                     reckoned position, and the calls the bar makes
-src/lib/bar.js       ControlBar: the St widget (seek row, transport, volume,
-                     rate, close) and CentredRowLayout
-src/lib/gamepads.js  libmanette → actions
-src/lib/actions.js   pure data shared with prefs.js: ACTIONS, BUTTONS, RATES,
-                     formatTime, playerNames/isIgnored
-src/lib/anim.js      the only durations and curves
-src/prefs.js         Bar / Players / Controllers pages
-src/schemas/         org.gnome.shell.extensions.media-controls
+src/extension.js      loader: stages lib/ under $XDG_RUNTIME_DIR/media-controls/
+src/lib/app.js        which player, when the bar is seen, the key, the pads,
+                      the sleep timer, perform(action)
+src/lib/mpris.js      PlayerRegistry + Player: the players on the bus, their
+                      reckoned position, and the calls the bar makes
+src/lib/bar.js        ControlBar: the St widget (seek row, transport, tracks,
+                      sleep, volume, rate, close, clock line) and CentredRowLayout
+src/lib/tracksmenu.js TracksMenu: the audio-and-subtitles pop-out (a PopupMenu)
+src/lib/vlcremote.js  VlcRemote: VLC's remote-control socket
+src/lib/vlcconfig.js  VLC's settings file: the two things we may change in it
+src/lib/gamepads.js   libmanette → (button, action)
+src/lib/actions.js    pure data shared with prefs.js: ACTIONS, BUTTONS,
+                      NAVIGATION, RATES, SLEEP_STEPS, formatTime, playerNames
+src/lib/anim.js       the only durations and curves
+src/prefs.js          Bar / Players (with the VLC switches) / Controllers pages
+src/schemas/          org.gnome.shell.extensions.media-controls
+scripts/vlc-setup.js  vlcconfig.js from the command line (nested `player` uses it)
 ```
 
 The **action vocabulary** (`ACTIONS` in `actions.js`) is the one list every input
 speaks: the bar's buttons emit an action id, the pads map a button id to one
 (`gamepad-buttons`), and `app.js` `perform()` is the only place an action turns
-into a call on the player. Add an action there and in `ACTIONS`, and both the
-pads and the preferences pick it up. `actions.js` is imported by `prefs.js`,
-which runs outside the shell: it must never import St, Clutter or `ui/`.
+into a call. Add an action there and in `ACTIONS`, and both the pads and the
+preferences pick it up. `actions.js` and `vlcconfig.js` are imported by
+`prefs.js`, which runs outside the shell: they must never import St, Clutter or
+`ui/`.
 
-`extension.js` is Media Libraries' loader: it copies `lib/` into a directory
-named after a checksum of its files and imports from there, because GJS caches
-modules by URL for the life of the shell — so `reload` picks up edits without a
-restart, and an unlock re-enables into the same module graph.
+`extension.js` copies `lib/` into a directory named after a checksum of its
+files and imports from there, because GJS caches modules by URL for the life of
+the shell — so `reload` picks up edits without a restart, and an unlock
+re-enables into the same module graph.
 
 ## How it fits together
 
@@ -95,13 +102,15 @@ controls.
 monitor, or `never`), watched with the shell's `PointerWatcher` — which polls
 `global.get_pointer()` only while the user is active, and takes no input away
 from the video, which a reactive hot strip would. The `toggle-bar` key (default
-Super+C) opens it **holding the keyboard** (`Main.pushModal`, `POPUP` tier);
-Escape, a click outside, or the key again puts it away. A pad button performs its
-action and flashes the bar. And the player's own changes show it: a pause (from a
-remote's media key, say — gsd-media-keys already sends those to the player), a
-seek, a new file. It hides after `hide-delay` seconds unless the pointer is on
-it, it holds the keyboard, a slider is being dragged, or — `stay-while-paused` —
-the player is paused.
+Super+C) or the pad's `navigate` (Start) opens it **holding the focus**
+(`Main.pushModal`, `POPUP` tier); Escape, a click outside, or the key again puts
+it away. A pad button performs its action and flashes the bar — except the
+subtitle actions, which leave it down so the subtitles under it stay visible.
+And the player's own changes show it: a pause (from a remote's media key, say —
+gsd-media-keys already sends those to the player), a seek, a new file. It hides
+after `hide-delay` seconds unless the pointer is on it, it holds the focus, the
+pop-out is open, a slider is being dragged, or — `stay-while-paused` — the
+player is paused.
 
 **How is it above the video?** It is chrome: `Main.layoutManager.addChrome()`
 with no params. Chrome lives in `uiGroup` above `global.window_group`, and only
@@ -117,13 +126,39 @@ directly cannot hide it.
 so `Player` keeps the last reading and the monotonic time it was taken, and
 `now` reckons forward from that at the current rate while playing. A reading is
 taken when the bar comes up from hidden, when a player starts playing, and
-whenever it announces `Seeked`; the bar redraws its running time on a 250 ms
-timer that only exists while it is visible and the player is playing. Seeks use
-`SetPosition(trackid, µs)` where the player names its track, relative `Seek`
-where it does not. **Nothing blocks a player**: every call is asynchronous with
-a 5 s timeout and a cancellable that `disable()` cancels; players are found with
-`NameOwnerChanged` (arg0 namespace `org.mpris.MediaPlayer2`) plus one `ListNames`
-at enable, and followed with `PropertiesChanged` and `Seeked`.
+whenever it announces `Seeked`; the bar redraws on a 250 ms timer that only
+exists while it is visible and something on it moves (the running time, the
+clock, the sleep countdown). Seeks use `SetPosition(trackid, µs)` where the
+player names its track, relative `Seek` where it does not. **Nothing blocks a
+player**: every call is asynchronous with a timeout and a cancellable that
+`disable()` cancels; players are found with `NameOwnerChanged` (arg0 namespace
+`org.mpris.MediaPlayer2`) plus one `ListNames` at enable, and followed with
+`PropertiesChanged` and `Seeked`.
+
+**Tracks** are VLC's alone: MPRIS has no audio or subtitle tracks, no subtitle
+timing and no chapters. VLC's C remote-control interface (`oldrc`) can listen on
+a Unix socket; `vlcconfig.js` turns it on in VLC's own settings file when the
+user flips the Players page's switch, at `$XDG_RUNTIME_DIR/media-controls-vlc.sock`
+(one path, since a settings file cannot name one per instance), together with
+the switch that turns VLC's own fullscreen controller off. `VlcRemote` connects
+when a VLC is attached, and keeps the connection only if the socket's **peer
+credentials** are that VLC's pid and VLC then **answers** a harmless `atrack`
+(it serves one client at a time; a second connection is accepted by the kernel
+and never read). With no socket, another VLC holding it, or any other player,
+the bar simply has no tracks button. The pop-out (`TracksMenu`) is the shell's
+own `PopupMenu` standing on the panel: audio and subtitles as radio lists that
+stay open as they are picked, a Timing row (− / value / + / ↺ in 0.1 s steps,
+VLC's `key-subdelay-*` hotkeys at 50 ms each, the value tracked here since VLC
+cannot be asked it, reset on each new input), and a chapter row when the file
+has chapters.
+
+**The pad drives the bar the way the keyboard does.** While the bar holds the
+focus, or its pop-out is open, the d-pad, the bottom and the right face buttons
+(`NAVIGATION` in `actions.js`) are pressed as the arrow keys, Return and Escape
+on a **Clutter virtual keyboard** — the on-screen keyboard's mechanism — so
+everything the keyboard reaches, the pad reaches, highlight and all. Those keys
+are only ever injected while the bar or the pop-out holds the grab, so they
+land on them and never on the player. Every other button keeps its own action.
 
 **Pads** go through **libmanette** (`gi://Manette?version=0.2`, the library
 WebKitGTK reads gamepads with), imported when enabled so a system without it
@@ -135,82 +170,146 @@ and an Xbox, PlayStation or Switch pad presses the same one. Triggers arrive as
 `BTN_TL2`/`BTN_TR2` presses, d-pad hats as `BTN_DPAD_*`. Pads are never
 grabbed. `ignored-gamepads` holds SDL GUIDs (a model, not a unit).
 
-MPRIS covers play/pause, seek, volume, rate, next/previous and quit. It has **no
-audio or subtitle track selection and no chapters** — those need VLC's rc
-interface (`--extraintf rc`) or mpv's IPC socket, and are not built. If they
-are, they belong behind the same `perform()` vocabulary, as optional
-per-player capabilities, not a second code path.
+**Settings that are off by default**: `show-clock` (a line under the title, "21:40
+· ends at 23:12", 12/24-hour as the top bar's clock is set) and `sleep-timer` (a
+button cycling 15–120 minutes, then the end of the file, then off; it pauses the
+player, the pause brings the bar up, and GNOME's own screen blank follows once
+the player stops holding it off — the end-of-file step pauses half a second
+before the end so a player set to exit at the end stays open). `bar-scale`
+(75–200 %) is one `font-size` percentage on the panel and the pop-out, which
+every em in the stylesheet follows, plus the icon sizes, which `bar.js` sets
+itself (see Gotchas).
 
 ## Design rules
 
 - **A modification of GNOME, not a second one.** The seek and volume sliders are
-  the quick settings' `Slider`; the buttons are `icon-button`s; the panel is
-  painted as the shell paints its OSD (`#2e2e33`, which the shell keeps dark in
-  the light theme too); placement is the OSD's `MonitorConstraint`. The only
-  layout of our own is `CentredRowLayout`, which keeps the transport buttons
-  centred however long the title is. Look for the shell's widget first.
+  the quick settings' `Slider`; the buttons are `icon-button`s; the pop-out is a
+  `PopupMenu` with the shell's radio ornaments; the panel is painted as the
+  shell paints its OSD (`#2e2e33`, which the shell keeps dark in the light theme
+  too); placement is the OSD's `MonitorConstraint`. The only layout of our own
+  is `CentredRowLayout`, which keeps the transport buttons centred however long
+  the title is. Look for the shell's widget first.
 - **Motion copies the shell.** `anim.js` holds the only durations: 200 ms
   ease-out-quad arriving (the bar rises 8 px as it fades in), 120 ms leaving.
   `actor.ease()` honours the animations toggle and slow-down factor.
-- **Type is in em** (1em is the shell's UI font; 0.818em its caption step), so
-  it follows Large Text. A px font-size in the stylesheet is a bug.
+- **Every size is in em** (1em is the shell's UI font; 0.818em its caption
+  step), so the bar follows Large Text and the size setting scales all of it.
+  A px size in the stylesheet — other than a hairline border or a shadow — is a
+  bug. Icons are the exception, sized in JS (`ICON_SIZE` × the setting).
 - **Colour comes from the accent** (`-st-accent-color`, `-st-accent-fg-color`,
   `st-lighten()`, `st-mix()`, `st-transparentize()`). Neutrals are the shell's.
   Buttons and sliders inside the bar carry their own colours
   (`.mc-bar .mc-button`, `.mc-bar .slider`) because the theme's are dark on
-  light in the light theme and the bar is always dark.
+  light in the light theme and the bar is always dark. The focus highlight is
+  the accent at full strength: it has to be found from a sofa.
 - **JS sizes are physical pixels; CSS is not.** A number that meets an
   allocation (`panel.width`, the row gap) is logical px times the stage's
-  `scale_factor`; nothing written into CSS is scaled.
+  `scale_factor`; nothing written into CSS is scaled. `St.Icon.icon_size` is
+  logical.
 - **No private shell API.** There is none today — no underscore field is read or
-  written. Keep it that way; if one becomes unavoidable, list it here with what
-  breaks when it moves.
+  written (`TracksMenu` uses `PopupMenu`'s public `sourceActor`,
+  `setSourceAlignment` and `itemActivated`). Keep it that way; if one becomes
+  unavoidable, list it here with what breaks when it moves.
 
 ## Gotchas
 
+VLC's remote-control socket, all found the hard way:
+
+- **The module is `oldrc`.** `--extraintf rc` loads VLC 3's *Lua* CLI, which
+  cannot listen on a Unix socket and ignores `--rc-unix`.
+- **`oldrc` will not start without a terminal** ("fd 0 is not a TTY"), socket or
+  not, unless `rc-fake-tty` is set.
+- **vlcrc options are read only under their module's section**: `rc-fake-tty`
+  anywhere but under `[oldrc]` is ignored. `vlcconfig.js` uncomments the line
+  VLC wrote in the right section, or adds it under its header.
+- **VLC drops the last character of every line of vlcrc as its newline** — the
+  last line's too, so a file that does not end in one loses a letter (the
+  socket came up as `…vlc.soc`).
+- **A Unix socket path is at most 107 bytes**, so it lives straight in
+  `$XDG_RUNTIME_DIR`, which is also private (0700).
+- **While paused, VLC answers almost everything with "Press pause to
+  continue."** — listing and setting tracks, chapters — but still takes `key`
+  hotkeys. `VlcRemote` keeps the lists it read while playing (read on connect
+  and whenever the bar comes up playing), shows those paused, and picks a track
+  paused by pressing `key-audio-track`/`key-subtitle-track` as many times as it
+  takes: VLC cycles in the order it lists them, audio skipping Disable,
+  subtitles through Off. Chapters use `key-chapter-next/prev`.
+- **One client at a time**, and a dropped connection is only noticed when VLC
+  next reads. So the connection is checked with `atrack` before it is trusted,
+  one unanswered attempt is retried a second later (a reload, a shell restart),
+  and `_dropRemote` closes before anything else.
+- **A subtitle that already started is not drawn after a track switch**; the
+  next one is. Not a failed switch.
+- **Subtitles are drawn along the foot of the picture, under the bar.** Hence
+  the subtitle actions leaving the bar down.
+
+The extension:
+
+- **Two writes at once on a GIO stream fail** ("Stream has outstanding
+  operation"); `VlcRemote` queues its lines. That failure used to read as VLC
+  going away.
+- **Never name a method `connect` on an `EventEmitter`.** `connectObject` is built
+  on the signal `connect`; shadowing it made every tracked connection a
+  Promise, and `disconnectObject` threw.
+- **`disable()` runs each teardown step on its own**, catching each. One that
+  threw used to abandon the rest — and the bar and handlers left behind kept
+  running beside the next enable's (two "Attached" lines per event).
+- **A `PopupMenuSection` closes the whole menu when one of its items is
+  activated** (its own `itemActivated`), so `TracksMenu` overrides it on the
+  sections as well as the menu.
+- **A `PopupMenu` toggles on Return or Space reaching its source actor** — the
+  panel, for `TracksMenu` (so it stands above the bar rather than over its top
+  row) — so the panel's key handler swallows those; a focused button has
+  already taken them.
+- **St does not size a button's icon against the panel's font**, so a font-size
+  on the panel scaled everything but the icons. `bar.js` sets `icon_size` from
+  `ICON_SIZE` × the setting, the pop-out's buttons too.
 - **`addChrome()` takes no `affectsInputRegion` on 50.** It was X11-only and is
   gone from `layout.js`'s `defaultParams`; passing it throws "Unrecognized
-  parameter" and the extension fails to enable. 48's default for it is `true`,
-  so no params is right everywhere.
+  parameter". 48's default for it is `true`, so no params is right everywhere.
 - **`Clutter.Grab` has no `get_seat_state()` on 50** (`activate`, `dismiss`,
   `is_revoked` only). The shell no longer checks what a `pushModal` grab got.
 - **Arrow keys never reach the focus manager while the bar holds the grab.**
   `St.FocusManager` moves focus from the stage's event handler, and a grab stops
-  the event at the grab actor. The panel's own `key-press-event` calls
-  `navigate_focus` itself — the shell's popup menu items do the same. A focused
-  slider takes Left/Right first (the seek slider skips by `seek-step` instead of
-  the Slider's 10%-of-the-film step); Up/Down leave it.
-- **An exception halfway through `enable()` still gets a `disable()`**, which
-  must cope with whatever was not built yet (`app.js` uses `?.` throughout
-  there).
+  the event at the grab actor. The panel calls `navigate_from_event` itself, as
+  the shell's popup menu items do. A focused slider takes Left/Right first (the
+  seek slider skips by `seek-step` instead of the Slider's 10%-of-the-film
+  step); Up/Down leave it.
 - **`extension.js` and `metadata.json` are cached for the life of the shell**;
   `reload` picks up `lib/`, the stylesheet and the schema only. New UUIDs need a
   logout (or a nested `stop` + `start`).
+
+The nested shell:
+
 - **dconf is shared with the real session — and with every other nested shell.**
   Each `dconf-service` caches the database when it starts and rewrites the
   *whole file* on its next write, so the last writer wins with a stale copy.
-  Change settings **before** `start` or **after** `stop`, and check whether
-  another project's nested shell is running (`ls $XDG_RUNTIME_DIR/*-nested`)
-  before writing at all: on the day this was built, Wallpaper Engine and Media
-  Libraries sessions had theirs up at the same time, and `enabled-extensions`
-  moved under all of them. `start` enables this extension in the nested shell
-  if dconf doesn't list it, which writes `enabled-extensions` for the real
-  session's next login too. **`start --clean` sidesteps all of it**: its own
-  profile (`DCONF_PROFILE`, handed to everything the nested bus activates) has
-  a writable `~/.config/dconf/media-controls-nested` over a read-only seed
+  Without `--clean`, change settings **before** `start` or **after** `stop`, and
+  check whether another project's nested shell is running (`ls
+  $XDG_RUNTIME_DIR/*-nested`) before writing at all: `enabled-extensions` has
+  moved under several at once. `start` enables this extension in the nested
+  shell if dconf doesn't list it, which writes `enabled-extensions` for the
+  real session's next login too. **`start --clean` sidesteps all of it**: its
+  own profile (`DCONF_PROFILE`, handed to everything the nested bus activates)
+  has a writable `~/.config/dconf/media_controls_nested` over a read-only seed
   compiled at start, and `stop` deletes the writable one. Settings changed
   there with `run gsettings …` go to that database alone.
+- **A dconf database is named by a D-Bus object-path element**
+  (`/ca/desrt/dconf/Writer/<name>`): letters, digits and underscores. With a
+  hyphen every write fails and `gsettings set` waits forever. Wrap nested
+  `gsettings` calls in `timeout`.
 - **VLC in the headless nested shell** has no GPU for Xwayland: its GL outputs
   fail ("video output creation failed") and it plays on with **no window**. The
   `player` command uses `--vout=xcb_x11 --avcodec-hw=none`. Its dummy audio
   output reports volume 0 and ignores a new one, so the generated test clip
-  carries a *silent* audio track and plays through the real sound server
+  carries *silent* audio tracks and plays through the real sound server
   (`--aout=pulse`); any other file gets `--no-audio`.
-- **VLC keeps a recent-media list and its volume in `~/.config/vlc`**, so a
-  test run in the nested shell used to land at the top of the user's own
-  recent files. `player` points VLC's `XDG_CONFIG_HOME`/`XDG_DATA_HOME` into
-  the run directory. (PipeWire still restores VLC's last stream volume, 85%
-  here; that is the sound server's, not VLC's.)
+- **VLC keeps a recent-media list and its volume in `~/.config/vlc`**, so
+  `player` points VLC's `XDG_CONFIG_HOME`/`XDG_DATA_HOME` into the run
+  directory, and sets that throwaway vlcrc up with `scripts/vlc-setup.js` (the
+  preferences' own code; `--plain` skips it). The socket path is the real one,
+  so a VLC on the real desktop that holds it leaves the nested one without a
+  tracks button — `player` warns.
 - **The nested shell's X11 display needs its own cookie.** `start` records the
   display (from the listening socket the nested gnome-shell holds) and the
   `.mutter-Xwaylandauth.*` it wrote, and `run`/`player` pass both; `stop`
@@ -219,9 +318,15 @@ per-player capabilities, not a second code path.
   *left* button**, and `BTN_Y` (`BTN_WEST`, 0x134) the top one. libmanette's
   output is positional; what the kernel sends is not. `fakepad.py` therefore
   takes position names and sends what xpad would.
+- **Escape goes to the player when the bar does not hold the focus**, and
+  VLC's Escape leaves fullscreen (after which the bar correctly detaches). A
+  pop-out opened with the mouse needs one Escape, not two.
 - **Never `pkill -f` a pattern that appears in your own command line** — it
   matches the shell running the command. Quit players with
   `./scripts/nested.sh mpris Quit` (root interface) or kill them by pid.
+
+Everywhere:
+
 - **Check the logs.** Exceptions inside the extension surface only in the shell
   journal (`make logs`) or, nested, `./scripts/nested.sh logs`. A JS error in
   `enable()` leaves nothing on screen, which reads as "the bar never shows".
@@ -230,7 +335,9 @@ per-player capabilities, not a second code path.
   GDBus answers on its worker thread — and processes stuck in the kernel).
 - **The 48 floor is by audit, not boot.** The APIs used are all present in 48:
   `St.BoxLayout({orientation})`, `-st-accent-color`, `Slider` with
-  `drag-begin`/`drag-end`, `global.stage.get_event_actor()`, `EventEmitter` in
-  `misc/signals.js`. Unredirection moved from `Meta.*_unredirect_for_display`
-  to `global.compositor` around 49; `bar.js` `setUnredirect` uses whichever
-  exists.
+  `drag-begin`/`drag-end`, `global.stage.get_event_actor()`,
+  `global.focus_manager.navigate_from_event()`, `EventEmitter` in
+  `misc/signals.js`, `PopupMenu.setSourceAlignment`, Clutter virtual input
+  devices. `Ornament.NO_DOT` falls back to `NONE` where missing. Unredirection
+  moved from `Meta.*_unredirect_for_display` to `global.compositor` around 49;
+  `bar.js` `setUnredirect` uses whichever exists.

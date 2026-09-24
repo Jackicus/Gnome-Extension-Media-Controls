@@ -34,6 +34,22 @@
             <default>5</default>
             <summary>Percent of volume per Volume up or Volume down</summary>
         </key>
+        <key name="bar-scale" type="i">
+            <range min="75" max="200"/>
+            <default>100</default>
+            <summary>Size of the bar, in percent</summary>
+            <description>Scales the whole bar and its pop-out together, for a screen seen from across a room.</description>
+        </key>
+        <key name="show-clock" type="b">
+            <default>false</default>
+            <summary>Show the time, and when the video ends</summary>
+            <description>A line under the title: the time now, and the time the video will end at the current speed.</description>
+        </key>
+        <key name="sleep-timer" type="b">
+            <default>false</default>
+            <summary>Show a sleep timer on the bar</summary>
+            <description>A button that pauses the player after 15, 30, 45, 60, 90 or 120 minutes, or at the end of the file; each press moves to the next, and one more turns it off.</description>
+        </key>
         <key name="toggle-bar" type="as">
             <default><![CDATA[['<Super>c']]]></default>
             <summary>Show the bar with the keyboard</summary>
@@ -59,9 +75,9 @@
             <description>SDL GUIDs, as the preferences list them. A GUID names a model, not a single pad.</description>
         </key>
         <key name="gamepad-buttons" type="a{ss}">
-            <default>{'south': 'play-pause', 'east': 'hide-bar', 'west': 'mute', 'north': 'show-bar', 'dpad-left': 'seek-back', 'dpad-right': 'seek-forward', 'dpad-up': 'volume-up', 'dpad-down': 'volume-down', 'left-shoulder': 'previous', 'right-shoulder': 'next', 'left-trigger': 'slower', 'right-trigger': 'faster', 'start': 'play-pause'}</default>
+            <default>{'south': 'play-pause', 'east': 'hide-bar', 'west': 'mute', 'north': 'tracks', 'dpad-left': 'seek-back', 'dpad-right': 'seek-forward', 'dpad-up': 'volume-up', 'dpad-down': 'volume-down', 'left-shoulder': 'previous', 'right-shoulder': 'next', 'left-trigger': 'slower', 'right-trigger': 'faster', 'start': 'navigate'}</default>
             <summary>What each controller button does</summary>
-            <description>Button ids and action ids from lib/actions.js. A button missing from the map does nothing.</description>
+            <description>Button ids and action ids from lib/actions.js. A button missing from the map does nothing. While the bar holds the focus (after "navigate"), the d-pad and the bottom and right buttons move around it instead.</description>
         </key>
     </schema>
 </schemalist>

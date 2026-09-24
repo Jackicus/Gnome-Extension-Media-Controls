@@ -27,8 +27,20 @@
 //   with `trackFullscreen` off, which is the default: chrome sits in uiGroup
 //   above every window, and only actors that ask to (the top bar) hide over a
 //   fullscreen one. While it is up it turns unredirection off, as the OSD does.
+//
+// Beyond MPRIS: a VLC whose settings open its remote-control socket
+// (vlcconfig.js) also gets the audio-and-subtitles pop-out (vlcremote.js,
+// tracksmenu.js), connected only once the socket's owner is the attached
+// player's own process. The pad can move around the bar: while it holds the
+// focus — opened with Start (`navigate`), the key, or with the pop-out up — the
+// d-pad and the bottom and right buttons are pressed as the arrow keys,
+// Return and Escape on a virtual keyboard, so the pad drives exactly what the
+// keyboard drives. Those keys are only ever pressed while the bar holds the
+// grab, so they can never reach the player. The sleep timer and the clock
+// are settings, off by default.
 
 import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
@@ -36,15 +48,24 @@ import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {getPointerWatcher} from 'resource:///org/gnome/shell/ui/pointerWatcher.js';
 
-import {isIgnored, stepRate} from './actions.js';
+import {NAVIGATION, SLEEP_STEPS, SUBTITLE_SHIFT_MS, isIgnored, playerNames, stepRate} from './actions.js';
 import {ControlBar} from './bar.js';
 import {Gamepads} from './gamepads.js';
 import {PlayerRegistry} from './mpris.js';
+import {VlcRemote} from './vlcremote.js';
 
 // How often the pointer is looked at while the user is active, in ms.
 const POINTER_INTERVAL = 100;
 // `bottom-edge` counts this much of the monitor's height as the edge.
 const EDGE_FRACTION = 0.2;
+// A VLC without its socket is asked again at most this often, in seconds, as
+// the bar comes up: it may have been set up since, or still be starting.
+const REMOTE_RETRY = 10;
+// The sleep timer's end-of-file step pauses this far before the end, so a
+// player that exits at the end of its file stays open, paused.
+const SLEEP_END_MARGIN = 0.5;
+
+const clock = () => GLib.get_monotonic_time() / 1e6;
 
 const normalise = id => (id ?? '').toLowerCase().replace(/\.desktop$/, '');
 
@@ -63,6 +84,13 @@ export class MediaControlsApp {
         this._pressId = 0;
         this._updateId = 0;
         this._watched = null;
+        this._remote = null;
+        this._remoteTriedAt = -Infinity;
+        this._remoteRetryId = 0;
+        this._keyboard = null;
+        this._sleep = null;
+        this._sleepId = 0;
+        this._interface = null;
     }
 
     enable() {
@@ -71,6 +99,8 @@ export class MediaControlsApp {
         this._bar = new ControlBar();
         this._bar.connect('action', (_bar, action) => this.perform(action));
         this._bar.panel.connect('notify::hover', () => this._armHide());
+        this._bar.tracksMenu.connect('open-state-changed', () => this._armHide());
+        this._bar.setScale(this._settings.get_int('bar-scale'));
         // No params: trackFullscreen is off by default, which is the point,
         // and 48's affectsInputRegion (default on) is gone by 50.
         Main.layoutManager.addChrome(this._bar);
@@ -78,7 +108,11 @@ export class MediaControlsApp {
         this._registry = new PlayerRegistry();
         this._registry.connectObject(
             'added', () => this._queueUpdate(),
-            'removed', () => this._queueUpdate(),
+            'removed', (_registry, player) => {
+                if (this._sleep?.player === player)
+                    this._setSleep(null);
+                this._queueUpdate();
+            },
             // A player's pid arrives after it does, and its desktop entry
             // with its properties; either can be what matches it.
             'changed', () => {
@@ -98,43 +132,61 @@ export class MediaControlsApp {
             'changed::ignored-players', () => this._queueUpdate(),
             'changed::pointer-reveal', () => this._syncPointerWatch(),
             'changed::gamepads', () => this._syncGamepads(),
+            'changed::bar-scale', () => this._bar.setScale(this._settings.get_int('bar-scale')),
+            'changed::show-clock', () => this._syncClock(),
+            'changed::sleep-timer', () => this._syncSleep(),
             this);
+        // The clock line follows the top bar's 12/24-hour setting.
+        this._interface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
+        this._interface.connectObject('changed::clock-format', () => this._syncClock(), this);
+        this._syncClock();
+        this._syncSleep();
 
         Main.wm.addKeybinding('toggle-bar', this._settings, Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
-            Shell.ActionMode.NORMAL | Shell.ActionMode.POPUP, () => this._toggleKeyboard());
+            Shell.ActionMode.NORMAL | Shell.ActionMode.POPUP, () => this._toggleFocus());
 
         this._syncGamepads();
         this._update();
     }
 
-    // Safe on a half-done enable(): an exception partway through leaves the
-    // extension enabled as far as the shell knows, and this is what runs next.
+    // Safe on a half-done enable(), and each step on its own: one that throws
+    // must not leave the rest standing — a bar and handlers left behind by a
+    // disable that stopped halfway keep running beside the next enable's.
     disable() {
-        Main.wm.removeKeybinding('toggle-bar');
-        this._ungrab();
-        this._pads?.disable();
+        const steps = [
+            () => Main.wm.removeKeybinding('toggle-bar'),
+            () => this._setSleep(null),
+            () => this._dropRemote(),
+            () => this._remoteRetryId && GLib.source_remove(this._remoteRetryId),
+            () => this._ungrab(),
+            () => this._pads?.disable(),
+            () => this._stopPointerWatch(),
+            () => this._hideId && GLib.source_remove(this._hideId),
+            () => this._updateId && GLib.source_remove(this._updateId),
+            () => this._watchWindow(null),
+            () => this._player?.disconnectObject(this),
+            () => global.display.disconnectObject(this),
+            () => Main.overview.disconnectObject(this),
+            () => Main.layoutManager.disconnectObject(this),
+            () => this._interface?.disconnectObject(this),
+            () => this._settings?.disconnectObject(this),
+            () => this._registry?.disconnectObject(this),
+            () => this._registry?.disable(),
+            () => this._bar?.destroy(),
+        ];
+        for (const step of steps) {
+            try {
+                step();
+            } catch (e) {
+                console.error('[Media Controls] Error during disable:', e);
+            }
+        }
         this._pads = null;
-        this._stopPointerWatch();
-        if (this._hideId) {
-            GLib.source_remove(this._hideId);
-            this._hideId = 0;
-        }
-        if (this._updateId) {
-            GLib.source_remove(this._updateId);
-            this._updateId = 0;
-        }
-        this._watchWindow(null);
-        this._player?.disconnectObject(this);
-        this._player = null;
-        this._window = null;
-        global.display.disconnectObject(this);
-        Main.overview.disconnectObject(this);
-        Main.layoutManager.disconnectObject(this);
-        this._settings?.disconnectObject(this);
-        this._registry?.disconnectObject(this);
-        this._registry?.disable();
+        this._hideId = this._updateId = 0;
+        this._player = this._window = null;
+        this._keyboard = null;
+        this._interface = null;
         this._registry = null;
-        this._bar?.destroy();
         this._bar = null;
         this._settings = null;
     }
@@ -198,6 +250,7 @@ export class MediaControlsApp {
         this._player?.disconnectObject(this);
         this._player = player;
         this._window = window;
+        this._dropRemote();
         this._ungrab();
         this._bar.setPlayer(player);
         if (!player) {
@@ -223,6 +276,7 @@ export class MediaControlsApp {
             'seeked', () => this._reveal(),
             this);
         this._syncPointerWatch();
+        this._connectRemote(player);
         // Paused already when it came into focus: say so.
         if (player.status === 'Paused')
             this._reveal();
@@ -234,15 +288,20 @@ export class MediaControlsApp {
     _reveal() {
         if (!this._player)
             return;
-        if (!this._bar.visible)
+        if (!this._bar.visible) {
             this._player.refreshPosition();
+            this._readTracks();
+            if (!this._remote && clock() - this._remoteTriedAt > REMOTE_RETRY)
+                this._connectRemote(this._player);
+        }
         this._bar.reveal();
         this._armHide();
     }
 
     _conceal() {
-        this._ungrab();
+        // The bar closes its pop-out, and the pop-out's own grab, first.
         this._bar.conceal();
+        this._ungrab();
         if (this._hideId) {
             GLib.source_remove(this._hideId);
             this._hideId = 0;
@@ -268,7 +327,7 @@ export class MediaControlsApp {
     }
 
     _staying() {
-        return this._bar.hovered || this._bar.dragging || !!this._grab ||
+        return this._bar.hovered || this._bar.dragging || !!this._grab || this._bar.menuOpen ||
             (this._settings.get_boolean('stay-while-paused') && this._player?.status === 'Paused');
     }
 
@@ -298,15 +357,18 @@ export class MediaControlsApp {
         this._reveal();
     }
 
-    // The key opens the bar holding the keyboard, so the arrow keys walk its
-    // buttons and Escape — or the key again — puts it away. The grab is the
-    // popup tier the shell's own menus use.
-    _toggleKeyboard() {
-        if (this._grab) {
+    // The key (and the pad's `navigate`) opens the bar holding the keyboard,
+    // so the arrow keys walk its buttons and Escape — or the key again — puts
+    // it away. The grab is the popup tier the shell's own menus use.
+    _toggleFocus() {
+        if (this._grab)
             this._conceal();
-            return;
-        }
-        if (!this._player)
+        else
+            this._enterFocus();
+    }
+
+    _enterFocus() {
+        if (!this._player || this._grab)
             return;
         this._reveal();
         this._grab = Main.pushModal(this._bar.panel, {actionMode: Shell.ActionMode.POPUP});
@@ -355,6 +417,20 @@ export class MediaControlsApp {
         case 'quit': this._quit(); return true;
         case 'hide-bar': this._conceal(); return true;
         case 'show-bar': break;
+        case 'navigate': this._toggleFocus(); return true;
+        case 'tracks': this._openTracks(); return true;
+        // These leave the bar where it is: subtitles are drawn along the
+        // foot of the picture, under the bar, and are what is being watched
+        // while they are timed. VLC says what changed in its own message.
+        case 'cycle-audio': this._remote?.cycleAudio(); return true;
+        case 'cycle-subtitles': this._remote?.cycleSubtitles(); return true;
+        case 'subtitles-earlier': this._remote?.shiftSubtitles(-SUBTITLE_SHIFT_MS); return true;
+        case 'subtitles-later': this._remote?.shiftSubtitles(SUBTITLE_SHIFT_MS); return true;
+        case 'sleep-timer':
+            if (!this._settings.get_boolean('sleep-timer'))
+                return false;
+            this._cycleSleep();
+            break;
         default: return false;
         }
         this._reveal();
@@ -372,10 +448,192 @@ export class MediaControlsApp {
             window?.delete(global.get_current_time());
     }
 
+    // ------------------------------------------------------------------
+    // Tracks
+    // ------------------------------------------------------------------
+    // VLC's remote-control socket, when this VLC opened one. A first attempt
+    // that finds VLC still busy with the connection before it (a reload, a
+    // shell restart) is tried once more a moment later.
+    _connectRemote(player, retry = true) {
+        this._dropRemote();
+        if (!player?.pid || !playerNames(player).includes('vlc'))
+            return;
+        this._remoteTriedAt = clock();
+        const remote = new VlcRemote();
+        this._remote = remote;
+        remote.open(player.pid).then(ok => {
+            if (this._remote !== remote)
+                return;
+            if (!ok) {
+                remote.close();
+                this._remote = null;
+                if (retry && remote.answered === false) {
+                    this._remoteRetryId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+                        this._remoteRetryId = 0;
+                        if (this._player === player && !this._remote)
+                            this._connectRemote(player, false);
+                        return GLib.SOURCE_REMOVE;
+                    });
+                }
+                return;
+            }
+            remote.connectObject('lost', () => {
+                if (this._remote === remote)
+                    this._dropRemote();
+            }, this);
+            this._bar.setRemote(remote);
+            this._readTracks();
+        });
+    }
+
+    // Closed before anything else, so a VLC is never left holding a
+    // connection nobody reads: it serves only one.
+    _dropRemote() {
+        const remote = this._remote;
+        if (!remote)
+            return;
+        this._remote = null;
+        remote.close();
+        remote.disconnectObject(this);
+        this._bar?.setRemote(null);
+    }
+
+    // VLC lists its tracks only while playing (vlcremote.js), so they are read
+    // whenever there is a chance — connecting, the bar coming up — for the
+    // pop-out to have them if it is opened paused.
+    _readTracks() {
+        if (this._remote && this._player?.playing)
+            this._remote.state().catch(() => {});
+    }
+
+    // With the keyboard or the pad in charge the pop-out takes the focus, so
+    // its lists can be walked the same way; from the mouse it just opens.
+    _openTracks() {
+        if (!this._remote) {
+            this._reveal();
+            return;
+        }
+        this._reveal();
+        this._bar.openTracks({focus: !!this._grab});
+    }
+
+    // ------------------------------------------------------------------
+    // The pad
+    // ------------------------------------------------------------------
+    _onPadButton(button, action) {
+        if (!this._player)
+            return;
+        const key = NAVIGATION[button];
+        if (key && (this._grab || this._bar.menuOpen)) {
+            this._pressKey(Clutter[`KEY_${key}`]);
+            return;
+        }
+        // The pop-out from the pad is walked with the pad.
+        if (action === 'tracks' && this._remote)
+            this._enterFocus();
+        this.perform(action);
+    }
+
+    // The on-screen keyboard's way of pressing a key. Only called while the
+    // bar or its pop-out holds the grab, so the key lands on them.
+    _pressKey(keyval) {
+        if (!this._keyboard) {
+            const seat = Clutter.get_default_backend().get_default_seat();
+            this._keyboard = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+        }
+        const time = GLib.get_monotonic_time();
+        this._keyboard.notify_keyval(time, keyval, Clutter.KeyState.PRESSED);
+        this._keyboard.notify_keyval(time, keyval, Clutter.KeyState.RELEASED);
+    }
+
+    // ------------------------------------------------------------------
+    // Clock and sleep timer
+    // ------------------------------------------------------------------
+    _syncClock() {
+        this._bar.setClock(this._settings.get_boolean('show-clock')
+            ? this._interface.get_string('clock-format') : null);
+    }
+
+    _syncSleep() {
+        const on = this._settings.get_boolean('sleep-timer');
+        if (!on)
+            this._setSleep(null);
+        this._bar.setSleep(on ? () => this._sleepText() : null);
+    }
+
+    _sleepText() {
+        if (!this._sleep)
+            return '';
+        if (this._sleep.step === 'end')
+            return 'End';
+        return `${Math.max(1, Math.ceil((this._sleep.until - clock()) / 60))} min`;
+    }
+
+    // Off, then each of SLEEP_STEPS in turn, then off again.
+    _cycleSleep() {
+        const at = this._sleep ? SLEEP_STEPS.indexOf(this._sleep.step) : -1;
+        this._setSleep(SLEEP_STEPS[at + 1] ?? null);
+    }
+
+    _setSleep(step) {
+        if (this._sleepId) {
+            GLib.source_remove(this._sleepId);
+            this._sleepId = 0;
+        }
+        for (const id of this._sleep?.signals ?? [])
+            this._sleep.player.disconnect(id);
+        this._sleep = null;
+        if (step === null || !this._player)
+            return;
+        const player = this._player;
+        this._sleep = {step, player, signals: []};
+        if (step === 'end') {
+            // Wherever the end moves to: a seek, a pause, another rate.
+            this._sleep.signals = [
+                player.connect('changed', () => this._armSleepEnd()),
+                player.connect('seeked', () => this._armSleepEnd()),
+            ];
+            this._armSleepEnd();
+        } else {
+            this._sleep.until = clock() + step * 60;
+            this._sleepId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, step * 60, () => {
+                this._sleepId = 0;
+                this._sleepEnded();
+                return GLib.SOURCE_REMOVE;
+            });
+        }
+    }
+
+    _armSleepEnd() {
+        if (this._sleepId) {
+            GLib.source_remove(this._sleepId);
+            this._sleepId = 0;
+        }
+        const p = this._sleep?.player;
+        if (!p?.playing || !p.length)
+            return;
+        const left = Math.max(0, (p.length - p.now) / (p.rate || 1) - SLEEP_END_MARGIN);
+        this._sleepId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.round(left * 1000), () => {
+            this._sleepId = 0;
+            this._sleepEnded();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    // Pause, and leave it at that: the pause brings the bar up and keeps it
+    // there, and once the player stops holding the screen awake GNOME's own
+    // blank-screen delay takes it from there.
+    _sleepEnded() {
+        const player = this._sleep?.player;
+        this._setSleep(null);
+        if (player && this._registry.players.includes(player))
+            player.pause();
+    }
+
     _syncGamepads() {
         const want = this._settings.get_boolean('gamepads');
         if (want && !this._pads) {
-            this._pads = new Gamepads(this._settings, action => this.perform(action));
+            this._pads = new Gamepads(this._settings, (button, action) => this._onPadButton(button, action));
             this._pads.enable().catch(e => console.error('[Media Controls] Could not watch controllers:', e));
         } else if (!want && this._pads) {
             this._pads.disable();
