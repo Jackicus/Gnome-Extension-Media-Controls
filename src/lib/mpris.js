@@ -74,10 +74,7 @@ export class Player extends EventEmitter {
         this.rate = 1;
         this.minRate = 1;
         this.maxRate = 1;
-        this.canControl = true;
         this.canSeek = false;
-        this.canPlay = false;
-        this.canPause = false;
         this.canGoNext = false;
         this.canGoPrevious = false;
         this.position = 0;
@@ -264,8 +261,7 @@ export class Player extends EventEmitter {
             if (this.volume > 0)
                 this._unmuted = null;
         }
-        for (const [key, field] of [['CanControl', 'canControl'], ['CanSeek', 'canSeek'],
-            ['CanPlay', 'canPlay'], ['CanPause', 'canPause'], ['CanGoNext', 'canGoNext'],
+        for (const [key, field] of [['CanSeek', 'canSeek'], ['CanGoNext', 'canGoNext'],
             ['CanGoPrevious', 'canGoPrevious']]) {
             if (key in props)
                 this[field] = !!props[key];
