@@ -162,6 +162,7 @@ export const ControlBar = GObject.registerClass({
         this._seeking = false;
         this._volumeDragging = false;
         this._tickId = 0;
+        this._shown = false;            // arriving or here, not leaving
         this._unredirectOff = false;
         this._scale = 1;
         this._monitorIndex = 0;
@@ -528,8 +529,12 @@ export const ControlBar = GObject.registerClass({
     // Coming and going
     // ------------------------------------------------------------------
     reveal() {
-        if (this.visible && this.opacity === 255)
+        // Arriving already, or here. The pointer asks again every 100 ms
+        // while it moves, and restarting the ease each time kept it from
+        // ever settling (the opacity stalls at 254 as it is rounded down).
+        if (this._shown)
             return;
+        this._shown = true;
         if (!this._unredirectOff) {
             // Over a fullscreen window the compositor may be sending that
             // window straight to the screen; the shell's OSD turns that off
@@ -557,6 +562,7 @@ export const ControlBar = GObject.registerClass({
     conceal({animate = true} = {}) {
         if (!this.visible)
             return;
+        this._shown = false;
         this.remove_all_transitions();
         this.tracksMenu.close();
         const done = () => {
