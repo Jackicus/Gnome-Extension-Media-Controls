@@ -108,15 +108,16 @@ export function formatTime(seconds) {
     return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
 }
 
-// Every name a player goes by, lower case: its desktop entry, the name it
+// A name as it is compared: lower case, without a .desktop suffix.
+export const normaliseName = name => (name ?? '').toLowerCase().replace(/\.desktop$/, '');
+
+// Every name a player goes by, normalised: its desktop entry, the name it
 // gives itself, and its bus name without the per-instance part. Chrome, for
 // one, names no desktop entry and calls itself "Chrome", but is
 // org.mpris.MediaPlayer2.chromium.instance123 on the bus.
 export function playerNames({desktopEntry, identity, busName}) {
     const suffix = (busName ?? '').replace(/^org\.mpris\.MediaPlayer2\./, '').replace(/\.instance[\w-]*$/, '');
-    const names = [desktopEntry, identity, suffix].filter(Boolean)
-        .map(name => name.toLowerCase().replace(/\.desktop$/, ''));
-    return [...new Set(names)];
+    return [...new Set([desktopEntry, identity, suffix].filter(Boolean).map(normaliseName))];
 }
 
 // Ignored if any of its names is on the list.

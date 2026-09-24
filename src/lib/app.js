@@ -48,7 +48,7 @@ import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {getPointerWatcher} from 'resource:///org/gnome/shell/ui/pointerWatcher.js';
 
-import {NAVIGATION, SLEEP_STEPS, SUBTITLE_SHIFT_MS, isIgnored, playerNames, stepRate} from './actions.js';
+import {NAVIGATION, SLEEP_STEPS, SUBTITLE_SHIFT_MS, isIgnored, normaliseName, playerNames, stepRate} from './actions.js';
 import {ControlBar} from './bar.js';
 import {Gamepads} from './gamepads.js';
 import {PlayerRegistry} from './mpris.js';
@@ -66,8 +66,6 @@ const REMOTE_RETRY = 10;
 const SLEEP_END_MARGIN = 0.5;
 
 const clock = () => GLib.get_monotonic_time() / 1e6;
-
-const normalise = id => (id ?? '').toLowerCase().replace(/\.desktop$/, '');
 
 export class MediaControlsApp {
     constructor(extension) {
@@ -229,7 +227,7 @@ export class MediaControlsApp {
     }
 
     _playerFor(window) {
-        const ignored = this._settings.get_strv('ignored-players').map(normalise);
+        const ignored = this._settings.get_strv('ignored-players').map(normaliseName);
         const players = this._registry.players.filter(p => !isIgnored(p, ignored));
         const pid = window.get_pid();
         const byPid = pid > 0 && players.find(p => p.pid === pid);
@@ -237,8 +235,8 @@ export class MediaControlsApp {
             return byPid;
         const app = Shell.WindowTracker.get_default().get_window_app(window);
         const ids = [app?.get_id(), window.get_sandboxed_app_id(), window.get_gtk_application_id(),
-            window.get_wm_class(), window.get_wm_class_instance()].filter(Boolean).map(normalise);
-        return players.find(p => p.desktopEntry && ids.includes(normalise(p.desktopEntry))) ?? null;
+            window.get_wm_class(), window.get_wm_class_instance()].filter(Boolean).map(normaliseName);
+        return players.find(p => p.desktopEntry && ids.includes(normaliseName(p.desktopEntry))) ?? null;
     }
 
     _attach(player, window) {
@@ -508,11 +506,8 @@ export class MediaControlsApp {
 
     // With the keyboard or the pad in charge the pop-out takes the focus, so
     // its lists can be walked the same way; from the mouse it just opens.
+    // Without a remote there is no tracks button, and only the bar comes up.
     _openTracks() {
-        if (!this._remote) {
-            this._reveal();
-            return;
-        }
         this._reveal();
         this._bar.openTracks({focus: !!this._grab});
     }

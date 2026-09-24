@@ -303,8 +303,7 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
                 runningRows.push(empty);
             }
 
-            for (const row of ignoredRows.splice(0))
-                ignoredExpander.remove(row);
+            removeAllRows(ignoredExpander, ignoredRows);
             const notRunning = ignored.filter(k => !keys.has(k));
             ignoredExpander.subtitle = notRunning.length
                 ? `${notRunning.length} not running now. Browsers are here by default: they draw their own controls.`
@@ -521,6 +520,8 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             group.add(placeholder);
         };
         showPlaceholder('Looking for controllers…', '');
+        const showNoPads = () => showPlaceholder('No controllers connected',
+            'Plug one in or pair it over Bluetooth; it appears here as soon as it is.');
 
         const timers = new Set();
         cleanup.add(() => timers.forEach(id => GLib.source_remove(id)));
@@ -602,8 +603,7 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
                 if (id)
                     device.disconnect(id);
                 devices.delete(device);
-                showPlaceholder('No controllers connected',
-                    'Plug one in or pair it over Bluetooth; it appears here as soon as it is.');
+                showNoPads();
             };
 
             const it = monitor.iterate();
@@ -611,8 +611,7 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
                 addDevice(device);
             const connectedId = monitor.connect('device-connected', (_m, device) => addDevice(device));
             const disconnectedId = monitor.connect('device-disconnected', (_m, device) => removeDevice(device));
-            showPlaceholder('No controllers connected',
-                'Plug one in or pair it over Bluetooth; it appears here as soon as it is.');
+            showNoPads();
 
             cleanup.add(() => {
                 monitor.disconnect(connectedId);
