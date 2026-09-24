@@ -1,0 +1,157 @@
+/* Media Controls — St stylesheet.
+ *
+ * Paint only: layout lives in lib/bar.js. The panel is painted the way the
+ * shell paints its OSD (.osd-window: #2e2e33, white text, a hairline border),
+ * which the shell keeps dark in the light theme as well — so does this, and
+ * the buttons and sliders inside it carry their own colours rather than the
+ * theme's, which in the light theme are dark on light.
+ *
+ * Colour comes from the accent: -st-accent-color / -st-accent-fg-color with
+ * st-lighten(), st-mix() and st-transparentize(), exactly as gnome-shell.css
+ * does. Type is in em, so it follows Settings → Accessibility → Large Text;
+ * 1em is the shell's UI font, and 0.818em is its caption step.
+ */
+
+.mc-bar {
+    color: #ffffff;
+    background-color: st-transparentize(#2e2e33, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 28px;
+    padding: 12px 18px 10px;
+    margin-bottom: 2em;
+    spacing: 4px;
+    box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* ---- Position ---------------------------------------------------------- */
+
+.mc-seek-row {
+    spacing: 12px;
+    padding: 0 6px;
+}
+
+.mc-time {
+    font-size: 0.818em;
+    font-weight: bold;
+    font-feature-settings: "tnum";
+    color: rgba(255, 255, 255, 0.8);
+    min-width: 4.4em;
+}
+
+.mc-elapsed {
+    text-align: right;
+}
+
+.mc-remaining {
+    text-align: left;
+}
+
+.mc-bar .slider {
+    color: #ffffff;
+    -barlevel-height: 4px;
+    -barlevel-background-color: rgba(255, 255, 255, 0.15);
+    -barlevel-active-background-color: -st-accent-color;
+}
+
+.mc-bar .slider:insensitive {
+    color: rgba(255, 255, 255, 0.4);
+    -barlevel-active-background-color: rgba(255, 255, 255, 0.4);
+}
+
+.mc-bar .slider:focus {
+    color: st-lighten(-st-accent-color, 20%);
+}
+
+.mc-seek {
+    height: 1.6em;
+}
+
+.mc-volume {
+    width: 6em;
+    margin: 0 6px 0 0;
+}
+
+/* ---- Buttons ----------------------------------------------------------- */
+
+.mc-control-row {
+    padding: 0 2px;
+}
+
+.mc-transport,
+.mc-extras {
+    spacing: 4px;
+}
+
+/* The shell's round icon-button, flat until hovered, as the media player in
+ * the message list has it. */
+.mc-bar .mc-button {
+    color: #ffffff;
+    background-color: transparent;
+}
+
+.mc-bar .mc-button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.mc-bar .mc-button:active {
+    background-color: rgba(255, 255, 255, 0.16);
+}
+
+.mc-bar .mc-button:focus {
+    background-color: rgba(255, 255, 255, 0.1);
+    box-shadow: inset 0 0 0 2px st-transparentize(st-mix(-st-accent-color, #ffffff, 60%), 0.2);
+}
+
+.mc-bar .mc-button:insensitive {
+    color: rgba(255, 255, 255, 0.35);
+    background-color: transparent;
+}
+
+.mc-bar .mc-play {
+    color: -st-accent-fg-color;
+    background-color: -st-accent-color;
+    padding: 0.95em;
+    margin: 0 6px;
+}
+
+.mc-bar .mc-play StIcon {
+    icon-size: 1.364em;
+}
+
+.mc-bar .mc-play:hover {
+    background-color: st-lighten(-st-accent-color, 6%);
+}
+
+/* The accent fill hides the usual focus tint, so the ring is white here. */
+.mc-bar .mc-play:focus {
+    background-color: st-lighten(-st-accent-color, 6%);
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+
+.mc-bar .mc-play:active {
+    background-color: st-lighten(-st-accent-color, 10%);
+}
+
+.mc-bar .mc-rate {
+    font-size: 0.818em;
+    font-weight: bold;
+    font-feature-settings: "tnum";
+    padding: 0.6em 0.9em;
+    min-width: 2.6em;
+}
+
+/* ---- Title ------------------------------------------------------------- */
+
+.mc-info {
+    spacing: 1px;
+    padding-left: 6px;
+}
+
+.mc-title {
+    font-weight: bold;
+}
+
+.mc-subtitle {
+    font-size: 0.818em;
+    color: rgba(255, 255, 255, 0.7);
+}

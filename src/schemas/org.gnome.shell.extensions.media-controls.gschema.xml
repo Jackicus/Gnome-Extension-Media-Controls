@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="gnome-shell-extensions">
+    <enum id="org.gnome.shell.extensions.media-controls.pointer-reveal">
+        <value nick="anywhere" value="0"/>
+        <value nick="bottom-edge" value="1"/>
+        <value nick="never" value="2"/>
+    </enum>
+
+    <schema path="/org/gnome/shell/extensions/media-controls/" id="org.gnome.shell.extensions.media-controls">
+
+        <!-- The bar -->
+        <key name="pointer-reveal" enum="org.gnome.shell.extensions.media-controls.pointer-reveal">
+            <default>'anywhere'</default>
+            <summary>When moving the pointer shows the bar</summary>
+            <description>"anywhere": any movement over the fullscreen player, as VLC's own controller does. "bottom-edge": only near the bottom of its monitor. "never": only the keyboard shortcut, a controller or the player pausing shows it.</description>
+        </key>
+        <key name="hide-delay" type="i">
+            <range min="1" max="15"/>
+            <default>3</default>
+            <summary>Seconds before the bar hides again</summary>
+            <description>Counted from the last pointer movement or action. The bar stays while the pointer is on it or it holds the keyboard.</description>
+        </key>
+        <key name="stay-while-paused" type="b">
+            <default>true</default>
+            <summary>Keep the bar up while paused</summary>
+        </key>
+        <key name="seek-step" type="i">
+            <range min="1" max="300"/>
+            <default>10</default>
+            <summary>Seconds skipped by Skip back and Skip forward</summary>
+        </key>
+        <key name="volume-step" type="i">
+            <range min="1" max="25"/>
+            <default>5</default>
+            <summary>Percent of volume per Volume up or Volume down</summary>
+        </key>
+        <key name="toggle-bar" type="as">
+            <default><![CDATA[['<Super>c']]]></default>
+            <summary>Show the bar with the keyboard</summary>
+            <description>Opens the bar holding the keyboard: the arrow keys move between its buttons, Enter presses one, Escape or the shortcut again puts it away.</description>
+        </key>
+
+        <!-- Players -->
+        <key name="ignored-players" type="as">
+            <default>['firefox', 'org.mozilla.firefox', 'firefox-esr', 'librewolf', 'io.gitlab.librewolf-community', 'zen', 'app.zen_browser.zen', 'chromium', 'org.chromium.chromium', 'chrome', 'google-chrome', 'com.google.chrome', 'brave', 'brave-browser', 'com.brave.browser', 'microsoft-edge', 'com.microsoft.edge', 'vivaldi', 'vivaldi-stable', 'org.gnome.epiphany']</default>
+            <summary>Players the bar is never shown over</summary>
+            <description>Lower-case names, matched against every name a player goes by: its desktop entry, its identity, and its bus name without the per-instance part (Chrome is "chromium" there). The browsers are here by default: a fullscreen video in one draws its own controls.</description>
+        </key>
+
+        <!-- Game controllers -->
+        <key name="gamepads" type="b">
+            <default>true</default>
+            <summary>Use game controllers</summary>
+            <description>Pads are read through libmanette and never grabbed; a button does something only while a fullscreen player is focused.</description>
+        </key>
+        <key name="ignored-gamepads" type="as">
+            <default>[]</default>
+            <summary>Controllers to ignore</summary>
+            <description>SDL GUIDs, as the preferences list them. A GUID names a model, not a single pad.</description>
+        </key>
+        <key name="gamepad-buttons" type="a{ss}">
+            <default>{'south': 'play-pause', 'east': 'hide-bar', 'west': 'mute', 'north': 'show-bar', 'dpad-left': 'seek-back', 'dpad-right': 'seek-forward', 'dpad-up': 'volume-up', 'dpad-down': 'volume-down', 'left-shoulder': 'previous', 'right-shoulder': 'next', 'left-trigger': 'slower', 'right-trigger': 'faster', 'start': 'play-pause'}</default>
+            <summary>What each controller button does</summary>
+            <description>Button ids and action ids from lib/actions.js. A button missing from the map does nothing.</description>
+        </key>
+    </schema>
+</schemalist>
