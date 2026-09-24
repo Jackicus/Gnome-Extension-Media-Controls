@@ -162,6 +162,7 @@ export const ControlBar = GObject.registerClass({
         this._seeking = false;
         this._volumeDragging = false;
         this._tickId = 0;
+        this._tickMode = null;          // 'playing', 'idle' or null
         this._shown = false;            // arriving or here, not leaving
         this._unredirectOff = false;
         this._scale = 1;
@@ -501,19 +502,31 @@ export const ControlBar = GObject.registerClass({
     }
 
     // A timer only while there is something on the bar that moves: the
-    // running time, the clock, the sleep timer's countdown.
+    // running time while playing, every TICK_MS; otherwise the clock and the
+    // sleep countdown, which move by the minute, so once a second will do —
+    // with `stay-while-paused` a paused bar can be up for hours.
     _updateTicking() {
-        const want = this.visible && (!!this._player?.playing || !!this._clockFormat || !!this._sleepText);
-        if (want && !this._tickId) {
-            this._tickId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, TICK_MS, () => {
-                this._tick();
-                return GLib.SOURCE_CONTINUE;
-            });
-            GLib.Source.set_name_by_id(this._tickId, '[media-controls] tick');
-        } else if (!want && this._tickId) {
+        let mode = null;
+        if (this.visible && this._player?.playing)
+            mode = 'playing';
+        else if (this.visible && (this._clockFormat || this._sleepText))
+            mode = 'idle';
+        if (mode === this._tickMode)
+            return;
+        if (this._tickId)
             GLib.source_remove(this._tickId);
-            this._tickId = 0;
-        }
+        this._tickId = 0;
+        this._tickMode = mode;
+        if (!mode)
+            return;
+        const tick = () => {
+            this._tick();
+            return GLib.SOURCE_CONTINUE;
+        };
+        this._tickId = mode === 'playing'
+            ? GLib.timeout_add(GLib.PRIORITY_DEFAULT, TICK_MS, tick)
+            : GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, tick);
+        GLib.Source.set_name_by_id(this._tickId, '[media-controls] tick');
     }
 
     _cycleRate() {
@@ -599,6 +612,7 @@ export const ControlBar = GObject.registerClass({
         if (this._tickId) {
             GLib.source_remove(this._tickId);
             this._tickId = 0;
+            this._tickMode = null;
         }
         if (this._unredirectOff) {
             setUnredirect(true);
