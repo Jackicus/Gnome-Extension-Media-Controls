@@ -1,7 +1,7 @@
 {
   "uuid": "media-controls@jackt",
   "name": "Media Controls",
-  "description": "A control bar over fullscreen video players: seek, pause, volume and speed for VLC, mpv or any player that speaks MPRIS, from the mouse, the keyboard or a game controller.",
+  "description": "A control bar for fullscreen video. Works with VLC, mpv and other players, from the mouse, keyboard or a game controller.",
   "settings-schema": "org.gnome.shell.extensions.media-controls",
   "shell-version": [ "48", "49", "50" ],
   "version": 1
