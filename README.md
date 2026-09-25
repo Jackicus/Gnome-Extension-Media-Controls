@@ -23,8 +23,8 @@ the mouse, the keyboard or a game controller.
 Needs GNOME Shell 48, 49 or 50.
 
 ```bash
-git clone https://github.com/Jackicus/Gnome-Extension-Media-Controls.git
-cd Gnome-Extension-Media-Controls
+git clone https://github.com/Jackicus/GNOME-Media-Controls.git
+cd GNOME-Media-Controls
 make install
 ```
 
