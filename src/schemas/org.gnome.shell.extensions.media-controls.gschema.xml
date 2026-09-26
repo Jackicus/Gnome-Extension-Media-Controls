@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<schemalist gettext-domain="gnome-shell-extensions">
+<schemalist>
     <enum id="org.gnome.shell.extensions.media-controls.pointer-reveal">
         <value nick="anywhere" value="0"/>
         <value nick="bottom-edge" value="1"/>

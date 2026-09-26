@@ -42,7 +42,7 @@ const encoder = new TextEncoder();
 // VLC lists no tracks while paused, and none have been read before.
 export class PausedError extends Error {}
 // VLC's own subtitle-delay hotkeys move it by 50 ms a press.
-export const SUBTITLE_STEP_MS = 50;
+const SUBTITLE_STEP_MS = 50;
 
 function isCancelled(e) {
     return e instanceof GLib.Error && e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED);
@@ -50,7 +50,7 @@ function isCancelled(e) {
 
 // "Japanese - [Japanese]" → "Japanese"; "Track 1 - [English]" → "English";
 // "Signs & Songs - [English]" → "Signs & Songs · English".
-export function trackLabel(raw) {
+function trackLabel(raw) {
     const match = raw.match(/^(.*?) - \[(.*)\]$/);
     if (!match)
         return raw;

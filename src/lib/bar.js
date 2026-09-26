@@ -36,7 +36,7 @@ const TICK_MS = 250;
 // Icon sizes at 100%, logical px: the shell's icon-button size, and the
 // play button's larger one. The size setting multiplies them in JS, since St
 // sizes a button's icon against the theme, not the panel's font size.
-export const ICON_SIZE = 16;
+const ICON_SIZE = 16;
 const PLAY_ICON_SIZE = 22;
 
 const scaleFactor = () => St.ThemeContext.get_for_stage(global.stage).scale_factor;

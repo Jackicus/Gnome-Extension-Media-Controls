@@ -69,7 +69,6 @@ const modulesOf = value => (value ?? '').split(/[:,]/).map(m => m.trim()).filter
 export function readVlcState(path = vlcrcPath()) {
     const lines = readLines(path);
     return {
-        exists: lines !== null,
         hideControls: valueOf(lines, 'qt-fs-controller') === '0',
         trackControl: modulesOf(valueOf(lines, 'extraintf')).includes(RC_MODULE) &&
             valueOf(lines, 'rc-unix') === SOCKET_PATH &&
