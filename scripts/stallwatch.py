@@ -104,8 +104,9 @@ def watch_dstate():
             # Kernel threads dip into D on every sample and mean nothing here;
             # they are the processes with no command line at all.
             try:
-                if os.path.getsize(base + '/cmdline') == 0 and open(base + '/cmdline', 'rb').read() == b'':
-                    continue
+                with open(base + '/cmdline', 'rb') as f:
+                    if not f.read():
+                        continue
             except OSError:
                 continue
             tasks = [(pid, base, comm, state)]
