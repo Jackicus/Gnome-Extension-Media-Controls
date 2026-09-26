@@ -125,6 +125,20 @@ function iconButton(iconName, accessibleName, extraClass = '') {
     });
 }
 
+// Left and Right on a slider skip by the bar's own steps — seek-step and
+// volume-step — instead of the Slider's tenth of the whole. A signal handler
+// runs before the Slider's own key handling and stops the key there.
+function arrowKeys(slider, forward, back) {
+    slider.connect('key-press-event', (_actor, event) => {
+        const key = event.get_key_symbol();
+        if (key !== Clutter.KEY_Right && key !== Clutter.KEY_Left)
+            return Clutter.EVENT_PROPAGATE;
+        const rtl = slider.get_text_direction() === Clutter.TextDirection.RTL;
+        slider.emit('action', (key === Clutter.KEY_Right) !== rtl ? forward : back);
+        return Clutter.EVENT_STOP;
+    });
+}
+
 // The shell greys a button and takes it out of the focus chain together
 // (popupMenu.js syncSensitive); St does only the first by itself.
 function setSensitive(actor, on) {
@@ -276,10 +290,10 @@ export const ControlBar = GObject.registerClass({
                 this._tick();
         });
         // The slider's own steps are a fraction of the whole — minutes, on a
-        // film. A scroll or an arrow key skips the way the buttons do: a
-        // wheel's notch once, a touchpad's fractions of a notch added up
-        // until one is due (as the Slider reads them, skipping the copy a
-        // wheel sends in the other form).
+        // film. A scroll skips the way the buttons do: a wheel's notch once,
+        // a touchpad's fractions of a notch added up until one is due (as
+        // the Slider reads them, skipping the copy a wheel sends in the
+        // other form). The arrow keys likewise (arrowKeys).
         this._seek.connect('scroll-event', (_actor, event) => {
             if (event.is_pointer_emulated())
                 return Clutter.EVENT_STOP;
@@ -307,16 +321,7 @@ export const ControlBar = GObject.registerClass({
                 this.emit('action', notches > 0 ? 'seek-forward' : 'seek-back');
             return Clutter.EVENT_STOP;
         });
-        this._seek.connect('key-press-event', (_actor, event) => {
-            const key = event.get_key_symbol();
-            const rtl = this._seek.get_text_direction() === Clutter.TextDirection.RTL;
-            if (key === Clutter.KEY_Right || key === Clutter.KEY_Left) {
-                const forward = (key === Clutter.KEY_Right) !== rtl;
-                this.emit('action', forward ? 'seek-forward' : 'seek-back');
-                return Clutter.EVENT_STOP;
-            }
-            return Clutter.EVENT_PROPAGATE;
-        });
+        arrowKeys(this._seek, 'seek-forward', 'seek-back');
     }
 
     _buildControlRow() {
@@ -392,18 +397,7 @@ export const ControlBar = GObject.registerClass({
             if (!this._syncing)
                 this._player?.setVolume(this._volume.value);
         });
-        // As the seek slider: an arrow key moves by the volume step the
-        // buttons and the pad use, not the Slider's own tenth.
-        this._volume.connect('key-press-event', (_actor, event) => {
-            const key = event.get_key_symbol();
-            const rtl = this._volume.get_text_direction() === Clutter.TextDirection.RTL;
-            if (key === Clutter.KEY_Right || key === Clutter.KEY_Left) {
-                const up = (key === Clutter.KEY_Right) !== rtl;
-                this.emit('action', up ? 'volume-up' : 'volume-down');
-                return Clutter.EVENT_STOP;
-            }
-            return Clutter.EVENT_PROPAGATE;
-        });
+        arrowKeys(this._volume, 'volume-up', 'volume-down');
         this._rate = new St.Button({
             style_class: 'icon-button mc-button mc-rate',
             label: '1×',
