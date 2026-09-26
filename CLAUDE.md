@@ -61,9 +61,22 @@ src/lib/actions.js    pure data shared with prefs.js: ACTIONS, BUTTONS,
                       NAVIGATION, RATES, SLEEP_STEPS, formatTime, playerNames
 src/lib/anim.js       the only durations and curves
 src/prefs.js          Bar / Players (with the VLC switches) / Controllers pages
+src/stylesheet.css    paint only, every size in em (see Design rules)
 src/schemas/          org.gnome.shell.extensions.media-controls
+src/metadata.json     UUID, shell versions
+scripts/dev.sh        link / install / reload / pack / logs / status / stalls / clean
+scripts/nested.sh     the nested shell: start / player / do / pad / mpris / stop …
+scripts/nested_driver.py  what `do`, `shot`, `say`, `window` run: input and
+                      screenshots over the nested shell's RemoteDesktop/Screenshot
+scripts/fakepad.py    the virtual Xbox pad `pad` plugs in (python-evdev)
+scripts/stallwatch.py what `make stalls` runs
+scripts/devices.js    what `dev.sh devices` runs: the players and pads on the bus
 scripts/vlc-setup.js  vlcconfig.js from the command line (nested `player` uses it)
 ```
+
+`docs/proposal.md` is a live proposal (taking the bar's colours from the
+shell's theme classes instead of copying the OSD's); nothing in it has been
+done yet.
 
 The **action vocabulary** (`ACTIONS` in `actions.js`) is the one list every input
 speaks: the bar's buttons emit an action id, the pads map a button id to one
@@ -251,9 +264,11 @@ The extension:
 - **Two writes at once on a GIO stream fail** ("Stream has outstanding
   operation"); `VlcRemote` queues its lines. That failure used to read as VLC
   going away.
-- **Never name a method `connect` on an `EventEmitter`.** `connectObject` is built
-  on the signal `connect`; shadowing it made every tracked connection a
-  Promise, and `disconnectObject` threw.
+- **Never name a method `connect` on an `EventEmitter`** — nor `connectAfter`,
+  `disconnect`, `disconnectAll`, `emit` or `signalHandlerIsConnected`.
+  `connectObject` is built on the signal methods it finds on the prototype;
+  a `connect` of our own made every tracked connection a Promise, and
+  `disconnectObject` threw.
 - **`disable()` runs each teardown step on its own**, catching each. One that
   threw used to abandon the rest — and the bar and handlers left behind kept
   running beside the next enable's (two "Attached" lines per event).

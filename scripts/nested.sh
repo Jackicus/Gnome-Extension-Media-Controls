@@ -56,7 +56,8 @@
 #
 # The nested shell is a complete second GNOME Shell with its own session bus. It
 # reads the same ~/.local/share/gnome-shell/extensions, so it picks up new UUIDs at
-# its own startup -- and if the extension throws, it dies instead of your session.
+# its own startup -- and anything the extension breaks, it breaks there, not in
+# your session (a throw in enable() leaves it at State: ERROR; see 'logs').
 #
 # It always runs headless: this mutter build has no windowed (nested) backend.
 # The mirror is a screencast of its virtual monitor, played on the real desktop

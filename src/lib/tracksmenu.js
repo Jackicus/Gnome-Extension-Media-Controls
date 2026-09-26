@@ -142,9 +142,6 @@ export class TracksMenu extends PopupMenu.PopupMenu {
             return;
         let state;
         try {
-        // The bar may have gone, or the player with it, while VLC was asked.
-        if (this._remote !== remote || !this.sourceActor.mapped)
-            return;
             state = await remote.state();
         } catch (e) {
             if (!(e instanceof PausedError))
@@ -152,6 +149,9 @@ export class TracksMenu extends PopupMenu.PopupMenu {
             // Paused before VLC was ever asked: say why the lists are empty.
             state = {audio: null, subtitles: null, chapter: {current: 0, count: 0}};
         }
+        // The bar may have gone, or the player with it, while VLC was asked.
+        if (this._remote !== remote || !this.sourceActor.mapped)
+            return;
         this._fill(state);
         this._aim();
         this.open(BoxPointer.PopupAnimation.FULL);
@@ -163,6 +163,8 @@ export class TracksMenu extends PopupMenu.PopupMenu {
 
     _fill({audio, subtitles, chapter}) {
         const unread = 'Play for a moment: VLC lists its tracks only while playing';
+        // A pick VLC does not answer (gone, or busy) is simply not made; the
+        // menu goes with the bar.
         this._fillList(this._audio, this._audioItems, audio?.filter(t => t.id !== -1) ?? [],
             audio ? 'No audio tracks' : unread, id => this._remote?.setAudio(id).catch(() => {}));
         this._fillList(this._subtitles, this._subtitleItems, subtitles ?? [],

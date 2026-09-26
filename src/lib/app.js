@@ -538,6 +538,7 @@ export class MediaControlsApp {
     // ------------------------------------------------------------------
     // Clock and sleep timer
     // ------------------------------------------------------------------
+    // The 12/24-hour setting is the shell's formatting's to read (bar.js).
     _syncClock() {
         this._bar.setClock(this._settings.get_boolean('show-clock'));
     }

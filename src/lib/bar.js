@@ -213,7 +213,9 @@ export const ControlBar = GObject.registerClass({
             case Clutter.KEY_KP_Enter:
             case Clutter.KEY_space:
                 return Clutter.EVENT_STOP;
-            return Clutter.EVENT_PROPAGATE;
+            default:
+                return Clutter.EVENT_PROPAGATE;
+            }
         });
 
         this._buildSeekRow();
@@ -274,7 +276,10 @@ export const ControlBar = GObject.registerClass({
                 this._tick();
         });
         // The slider's own steps are a fraction of the whole — minutes, on a
-        // film. A scroll or an arrow key skips the way the buttons do.
+        // film. A scroll or an arrow key skips the way the buttons do: a
+        // wheel's notch once, a touchpad's fractions of a notch added up
+        // until one is due (as the Slider reads them, skipping the copy a
+        // wheel sends in the other form).
         this._seek.connect('scroll-event', (_actor, event) => {
             if (event.is_pointer_emulated())
                 return Clutter.EVENT_STOP;
@@ -387,6 +392,18 @@ export const ControlBar = GObject.registerClass({
             if (!this._syncing)
                 this._player?.setVolume(this._volume.value);
         });
+        // As the seek slider: an arrow key moves by the volume step the
+        // buttons and the pad use, not the Slider's own tenth.
+        this._volume.connect('key-press-event', (_actor, event) => {
+            const key = event.get_key_symbol();
+            const rtl = this._volume.get_text_direction() === Clutter.TextDirection.RTL;
+            if (key === Clutter.KEY_Right || key === Clutter.KEY_Left) {
+                const up = (key === Clutter.KEY_Right) !== rtl;
+                this.emit('action', up ? 'volume-up' : 'volume-down');
+                return Clutter.EVENT_STOP;
+            }
+            return Clutter.EVENT_PROPAGATE;
+        });
         this._rate = new St.Button({
             style_class: 'icon-button mc-button mc-rate',
             label: '1×',
@@ -412,18 +429,6 @@ export const ControlBar = GObject.registerClass({
     setPlayer(player) {
         if (player === this._player)
             return;
-        // As the seek slider: an arrow key moves by the volume step the
-        // buttons and the pad use, not the Slider's own tenth.
-        this._volume.connect('key-press-event', (_actor, event) => {
-            const key = event.get_key_symbol();
-            const rtl = this._volume.get_text_direction() === Clutter.TextDirection.RTL;
-            if (key === Clutter.KEY_Right || key === Clutter.KEY_Left) {
-                const up = (key === Clutter.KEY_Right) !== rtl;
-                this.emit('action', up ? 'volume-up' : 'volume-down');
-                return Clutter.EVENT_STOP;
-            }
-            return Clutter.EVENT_PROPAGATE;
-        });
         this._player?.disconnectObject(this);
         this._player = player;
         this._player?.connectObject('changed', () => this.sync(), this);

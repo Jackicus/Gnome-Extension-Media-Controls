@@ -8,8 +8,8 @@ description: Run Media Controls in a throwaway nested GNOME Shell, mirrored live
 The bar is drawn over a fullscreen window, so the only way to verify a visual
 change is to look at it. The nested shell is a complete second GNOME Shell with
 its own session bus and virtual monitor, reading the same installed extension;
-if the code throws during `enable()` it takes down the *nested* shell, never the
-user's.
+whatever the code breaks, it breaks there, never in the user's session (a throw
+in `enable()` leaves the extension at State: ERROR, which `logs` shows).
 
 It runs headless, and `start` opens a **live mirror window on the user's real
 desktop** so they can watch. Two people are looking: you through screenshots,
@@ -134,9 +134,12 @@ to `extension.js`, `metadata.json` or the schema *need* one.
   it is plugged in. It does nothing there unless a fullscreen player is focused
   on the real desktop.
 - **Screenshots for the README** live in `docs/screenshots/`: taken under
-  `--clean`, 1600×900, the film is Big Buck Bunny (CC BY 3.0, credited in the
-  README) remuxed with a silent audio track so VLC reports a real volume. The
-  hero is a JPEG, the preference windows PNGs from `window`.
+  `--clean`, 1600×900, the film is `dist/big-buck-bunny-demo.mkv` — Big Buck
+  Bunny (CC BY 3.0, credited in the README) with two audio tracks (Stereo, 5.1
+  Surround) and two subtitle tracks (English, Español), so the tracks pop-out
+  has something to show. It was made by hand, is not in git and no script
+  regenerates it; `make clean` leaves it alone. The hero is a JPEG, the
+  preference windows PNGs from `window`.
 - **Never click or hover at the top-left**: the Activities hot corner.
 - **`Eval` is blocked** in the nested shell; drive it with input and D-Bus like a
   user would. Screenshots and banners borrow `org.gnome.SettingsDaemon.MediaKeys`

@@ -81,7 +81,7 @@ enable_extension() {
             ok "Enabled."
         else
             warn "The running GNOME Shell does not know about $UUID yet."
-            warn "Log out and back in (Wayland) or Alt+F2 'r' (X11), then: make reload"
+            warn "Log out and back in (Wayland) or Alt+F2 'r' (X11), then: gnome-extensions enable $UUID"
         fi
     fi
 }

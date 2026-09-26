@@ -62,9 +62,9 @@ Checked against GNOME Shell 50.5's `gnome-shell-dark.css`,
 
 | Widget | Style classes now | Proposed | Our rules deleted |
 |---|---|---|---|
-| Panel (`bar.js:174`) | `mc-bar` | `screenshot-ui-panel mc-bar` | `color`, `background-color`, `border`, `box-shadow` from `.mc-bar` |
-| Transport, tracks, mute, close, rate, sleep (`bar.js:120`, `:325`, `:356`) | `icon-button mc-button` | `screenshot-ui-type-button mc-button` | `.mc-bar .mc-button` colours, `:hover`, `:active`, `:insensitive` |
-| Play (`bar.js:306`) | `icon-button mc-button mc-play` | `button default mc-button mc-play` | `.mc-play` colours, `:hover`, `:active` |
+| Panel (`this.panel` in `bar.js`) | `mc-bar` | `screenshot-ui-panel mc-bar` | `color`, `background-color`, `border`, `box-shadow` from `.mc-bar` |
+| Transport, tracks, mute, close, rate, sleep (`iconButton()`, `mc-sleep`, `mc-rate` in `bar.js`) | `icon-button mc-button` | `screenshot-ui-type-button mc-button` | `.mc-bar .mc-button` colours, `:hover`, `:active`, `:insensitive` |
+| Play (`mc-play`) | `icon-button mc-button mc-play` | `button default mc-button mc-play` | `.mc-play` colours, `:hover`, `:active` |
 
 `button default` is the shell's default action button in dialogs: the accent
 fill, with its hover, active and focus states, in every theme.
