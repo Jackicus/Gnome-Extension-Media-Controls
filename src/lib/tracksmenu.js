@@ -114,13 +114,6 @@ export class TracksMenu extends PopupMenu.PopupMenu {
         this._chapters.addButton('go-previous-symbolic', 'Previous chapter', () => this._chapter(-1));
         this._chapters.addButton('go-next-symbolic', 'Next chapter', () => this._chapter(1));
         this.addMenuItem(this._chapters);
-
-        // Above the bar, which raises itself above the rest of the chrome
-        // each time it is shown.
-        this.connect('open-state-changed', (_menu, open) => {
-            if (open)
-                this.actor.get_parent()?.set_child_above_sibling(this.actor, null);
-        });
     }
 
     // Picking a track keeps the menu open (see the top of the file).
