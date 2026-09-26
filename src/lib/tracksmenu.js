@@ -144,11 +144,15 @@ export class TracksMenu extends PopupMenu.PopupMenu {
     // current audio track takes the keyboard (the bar was opened with the
     // keyboard or the pad).
     async openFresh({focus = false} = {}) {
-        if (!this._remote)
+        const remote = this._remote;
+        if (!remote)
             return;
         let state;
         try {
-            state = await this._remote.state();
+        // The bar may have gone, or the player with it, while VLC was asked.
+        if (this._remote !== remote || !this.sourceActor.mapped)
+            return;
+            state = await remote.state();
         } catch (e) {
             if (!(e instanceof PausedError))
                 return;
@@ -167,9 +171,9 @@ export class TracksMenu extends PopupMenu.PopupMenu {
     _fill({audio, subtitles, chapter}) {
         const unread = 'Play for a moment: VLC lists its tracks only while playing';
         this._fillList(this._audio, this._audioItems, audio?.filter(t => t.id !== -1) ?? [],
-            audio ? 'No audio tracks' : unread, id => this._remote?.setAudio(id));
+            audio ? 'No audio tracks' : unread, id => this._remote?.setAudio(id).catch(() => {}));
         this._fillList(this._subtitles, this._subtitleItems, subtitles ?? [],
-            subtitles ? 'No subtitles' : unread, id => this._remote?.setSubtitles(id));
+            subtitles ? 'No subtitles' : unread, id => this._remote?.setSubtitles(id).catch(() => {}));
         // Only Off, or unknown: nothing to time.
         this._sync.visible = !!subtitles?.some(t => t.id !== -1);
         this._syncDelay();
