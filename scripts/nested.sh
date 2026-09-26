@@ -641,7 +641,7 @@ cmd_player() {
 vlc_count() {
     nested_env gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
         --method org.freedesktop.DBus.ListNames 2>/dev/null \
-        | grep -o "'org\.mpris\.MediaPlayer2\.vlc[^']*'" | wc -l
+        | grep -o "'org\.mpris\.MediaPlayer2\.vlc[^']*'" | wc -l || true
 }
 
 # The first MPRIS player on the nested bus -- enough for checking what a click
