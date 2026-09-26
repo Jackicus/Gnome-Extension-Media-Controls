@@ -26,7 +26,10 @@
 // (VLC cycles in the order it lists them: audio skipping Disable, subtitles
 // through Off).
 //
-// Every call is asynchronous, with a timeout, and cancelled by close().
+// Every call is asynchronous and cancelled by close(). A reply that has not
+// come in REPLY_TIMEOUT_MS ends the connection: replies are matched to
+// commands by their verb, so a late one would be taken for the next
+// command's. The bar reconnects the next time it comes up.
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -297,11 +300,8 @@ export class VlcRemote extends EventEmitter {
         const pending = this._pending = this._queue.shift();
         pending.timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, REPLY_TIMEOUT_MS, () => {
             pending.timeoutId = 0;
-            if (this._pending === pending) {
-                this._pending = null;
-                pending.reject(new Error(`VLC did not answer ${pending.text}`));
-                this._next();
-            }
+            if (this._pending === pending)
+                this._lost(new Error(`VLC did not answer ${pending.text}`));
             return GLib.SOURCE_REMOVE;
         });
         this._send(pending.text);
@@ -348,13 +348,13 @@ export class VlcRemote extends EventEmitter {
         }
     }
 
-    // VLC went away, or the connection broke.
-    _lost() {
+    // VLC went away, the connection broke, or VLC stopped answering.
+    _lost(error = new Error('VLC closed the connection')) {
         if (!this._connection)
             return;
         this._connection = null;
         this._input = this._output = null;
-        this._fail(new Error('VLC closed the connection'));
+        this._fail(error);
         this.emit('lost');
     }
 

@@ -255,7 +255,10 @@ VLC's remote-control socket, all found the hard way:
 - **One client at a time**, and a dropped connection is only noticed when VLC
   next reads. So the connection is checked with `atrack` before it is trusted,
   one unanswered attempt is retried a second later (a reload, a shell restart),
-  and `_dropRemote` closes before anything else.
+  and `_dropRemote` closes before anything else. Replies are matched to
+  commands by verb, so a reply that has not come in 2 s ends the connection
+  rather than being taken for the next command's; the bar reconnects the next
+  time it comes up.
 - **A subtitle that already started is not drawn after a track switch**; the
   next one is. Not a failed switch.
 - **Subtitles are drawn along the foot of the picture, under the bar.** Hence
