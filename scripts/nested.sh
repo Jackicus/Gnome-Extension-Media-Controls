@@ -42,6 +42,8 @@
 #   ./scripts/nested.sh key KEYSYM    press a key or chord (Escape, Super+c, ...)
 #   ./scripts/nested.sh overview on|off   show/hide the Activities overview
 #   ./scripts/nested.sh reload        disable/enable Media Controls inside the nested shell
+#   ./scripts/nested.sh preview       start --clean, play the test clip, bring the bar
+#                                     up and screenshot it to dist/preview.png
 #   ./scripts/nested.sh mirror on|off open/close the live mirror window
 #   ./scripts/nested.sh run CMD...    run CMD against the nested shell's session bus
 #                                     and display (never the real desktop's)
@@ -515,18 +517,22 @@ cmd_step() {
     driver step "$@"
 }
 
+# dev.sh's reload, pointed at the nested bus: the same disable/enable dance,
+# with the same wait for the disable to land.
 cmd_reload() {
     require_running
     info "Reloading $UUID inside the nested shell..."
-    glib-compile-schemas "$REPO_DIR/src/schemas"
-    nested_env gnome-extensions disable "$UUID" 2>/dev/null || true
-    # Same race as the real session: enabling before the disable lands is a silent
-    # no-op that leaves the extension INACTIVE with nothing in the log.
-    wait_state INACTIVE || true
-    nested_env gnome-extensions enable "$UUID" || die "Could not enable $UUID in the nested shell."
-    wait_state ACTIVE \
-        || die "Enabled but not ACTIVE -- check './scripts/nested.sh logs' for a JS error."
-    ok "Reloaded."
+    nested_env "$REPO_DIR/scripts/dev.sh" reload \
+        || die "Not ACTIVE after the reload -- check './scripts/nested.sh logs' for a JS error."
+}
+
+# What `make preview` runs: the bar over the test clip, in one shot.
+cmd_preview() {
+    cmd_start --clean
+    cmd_player
+    local shot="$REPO_DIR/dist/preview.png"
+    cmd_do "say Media Controls preview" "move 700 400" "move 760 430" "wait 0.6" "shot $shot" >/dev/null
+    ok "Screenshot: $shot"
 }
 
 # The clip `player` plays by default: ten minutes of SMPTE bars with the
@@ -804,6 +810,7 @@ case "$cmd" in
     pad)         cmd_pad "$@" ;;
     mirror)      cmd_mirror "${1:-}" ;;
     reload)      cmd_reload ;;
+    preview)     cmd_preview ;;
     run)         cmd_run "$@" ;;
     logs)        cmd_logs "$@" ;;
     status)      cmd_status ;;

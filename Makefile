@@ -26,7 +26,7 @@ nested-status:
 	@$(NESTED) status
 
 preview:
-	@$(NESTED) start >/dev/null && $(NESTED) shot
+	@$(NESTED) preview
 
 help:
 	@$(DEV) help
