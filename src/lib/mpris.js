@@ -21,9 +21,9 @@ import GLib from 'gi://GLib';
 
 import {EventEmitter} from 'resource:///org/gnome/shell/misc/signals.js';
 
-const MPRIS_NAMESPACE = 'org.mpris.MediaPlayer2';
-const MPRIS_PATH = '/org/mpris/MediaPlayer2';
+// The bus-name namespace is the root interface's name as well.
 const ROOT = 'org.mpris.MediaPlayer2';
+const MPRIS_PATH = '/org/mpris/MediaPlayer2';
 const PLAYER = 'org.mpris.MediaPlayer2.Player';
 const PROPERTIES = 'org.freedesktop.DBus.Properties';
 const NO_TRACK = '/org/mpris/MediaPlayer2/TrackList/NoTrack';
@@ -247,8 +247,11 @@ export class Player extends EventEmitter {
                 refresh = true;
             }
             this.url = url;
-            this.trackId = meta['mpris:trackid'] ?? null;
-            this.length = (meta['mpris:length'] ?? 0) / 1e6;
+            // A track id that is not an object path (some shims send a plain
+            // string) cannot go into SetPosition; the player gets Seek.
+            const trackId = meta['mpris:trackid'];
+            this.trackId = typeof trackId === 'string' && GLib.variant_is_object_path(trackId) ? trackId : null;
+            this.length = Math.max(0, meta['mpris:length'] ?? 0) / 1e6;
             this.title = meta['xesam:title'] || nameFromUrl(url);
             const artist = meta['xesam:artist'];
             this.artist = Array.isArray(artist) ? artist.join(', ') : artist ?? '';
@@ -298,7 +301,7 @@ export class PlayerRegistry extends EventEmitter {
         const bus = this._bus;
         this._subscriptions = [
             bus.signal_subscribe('org.freedesktop.DBus', 'org.freedesktop.DBus', 'NameOwnerChanged',
-                '/org/freedesktop/DBus', MPRIS_NAMESPACE, Gio.DBusSignalFlags.MATCH_ARG0_NAMESPACE,
+                '/org/freedesktop/DBus', ROOT, Gio.DBusSignalFlags.MATCH_ARG0_NAMESPACE,
                 (_bus, _sender, _path, _iface, _signal, params) => {
                     const [name, oldOwner, newOwner] = params.deep_unpack();
                     if (oldOwner)
@@ -349,7 +352,7 @@ export class PlayerRegistry extends EventEmitter {
                         console.warn(`[Media Controls] Could not list media players: ${e.message}`);
                     return;
                 }
-                for (const name of names.filter(n => n.startsWith(`${MPRIS_NAMESPACE}.`)))
+                for (const name of names.filter(n => n.startsWith(`${ROOT}.`)))
                     this._lookUpOwner(name);
             });
     }
