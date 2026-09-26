@@ -14,7 +14,8 @@
 #   ./scripts/dev.sh stalls [LOG]  watch for desktop freezes: shell main-loop
 #                                  stalls and processes stuck in the kernel,
 #                                  with timestamps
-#   ./scripts/dev.sh clean      remove compiled schemas and dist/
+#   ./scripts/dev.sh clean      remove the compiled schema and what the scripts
+#                               put in dist/ (the zip, the test clip, shots, logs)
 #
 set -euo pipefail
 
@@ -156,10 +157,13 @@ cmd_uninstall() {
     ok "Removed $EXT_DIR"
 }
 
+# Only what the scripts make: dist/ also holds hand-made films for the README
+# screenshots, which nothing can regenerate.
 cmd_clean() {
     rm -f "$SRC_DIR/schemas/gschemas.compiled"
-    rm -rf "$REPO_DIR/dist"
-    ok "Cleaned compiled schemas and dist/."
+    rm -f "$REPO_DIR"/dist/*.shell-extension.zip "$REPO_DIR/dist/test-video.mkv" \
+        "$REPO_DIR/dist/stalls.log" "$REPO_DIR"/dist/nested-*.png "$REPO_DIR/dist/preview.png"
+    ok "Cleaned the compiled schema and the scripts' files in dist/."
 }
 
 # A freeze is over by the time anyone looks; this leaves a log of what stalled.
