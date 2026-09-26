@@ -125,6 +125,12 @@ function iconButton(iconName, accessibleName, extraClass = '') {
     });
 }
 
+// The shell greys a button and takes it out of the focus chain together
+// (popupMenu.js syncSensitive); St does only the first by itself.
+function setSensitive(actor, on) {
+    actor.reactive = actor.can_focus = on;
+}
+
 function rateLabel(rate) {
     return `${Number(rate.toFixed(2))}×`;
 }
@@ -465,10 +471,11 @@ export const ControlBar = GObject.registerClass({
 
             this._play.icon_name = p.playing ? 'media-playback-pause-symbolic' : 'media-playback-start-symbolic';
             this._play.accessible_name = p.playing ? 'Pause' : 'Play';
-            this._previous.reactive = p.canGoPrevious;
-            this._next.reactive = p.canGoNext;
-            this._back.reactive = this._forward.reactive = p.canSeek;
-            this._seek.reactive = p.canSeek && p.length > 0;
+            setSensitive(this._previous, p.canGoPrevious);
+            setSensitive(this._next, p.canGoNext);
+            setSensitive(this._back, p.canSeek);
+            setSensitive(this._forward, p.canSeek);
+            setSensitive(this._seek, p.canSeek && p.length > 0);
 
             if (!this._volumeDragging)
                 this._volume.value = Math.min(1, p.volume);
