@@ -150,7 +150,6 @@ export class MediaControlsApp {
             () => Main.wm.removeKeybinding('toggle-bar'),
             () => this._setSleep(null),
             () => this._dropRemote(),
-            () => this._remoteRetryId && GLib.source_remove(this._remoteRetryId),
             () => this._ungrab(),
             () => this._keyboard?.run_dispose(),
             () => this._pads?.disable(),
@@ -481,8 +480,13 @@ export class MediaControlsApp {
     }
 
     // Closed before anything else, so a VLC is never left holding a
-    // connection nobody reads: it serves only one.
+    // connection nobody reads: it serves only one. A retry still pending is
+    // for this player, and goes too.
     _dropRemote() {
+        if (this._remoteRetryId) {
+            GLib.source_remove(this._remoteRetryId);
+            this._remoteRetryId = 0;
+        }
         const remote = this._remote;
         if (!remote)
             return;
