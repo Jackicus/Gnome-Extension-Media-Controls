@@ -19,9 +19,9 @@
 //   player pauses, seeks or changes file by itself. It goes after
 //   `hide-delay` seconds unless the pointer is on it, it has the keyboard, its
 //   pop-out is open, a slider is being dragged, or — with `stay-while-paused`
-//   — the player is paused. The pointer is watched with the shell's PointerWatcher, which
-//   polls only while the user is active and takes no input away from the
-//   video.
+//   — the player is paused. The pointer is watched with the shell's
+//   PointerWatcher, which polls only while the user is active and takes no
+//   input away from the video.
 //
 // How is it above the video?  It is chrome (`Main.layoutManager.addChrome`)
 //   with `trackFullscreen` off, which is the default: chrome sits in uiGroup
@@ -556,18 +556,25 @@ export class MediaControlsApp {
         this._bar.setSleep(on ? () => this._sleepText() : null);
     }
 
+    // The timer belongs to the player it was set on: it outlives a moment's
+    // change of focus, and shows on that player's bar alone.
     _sleepText() {
-        if (!this._sleep)
+        if (!this._sleep || this._sleep.player !== this._player)
             return '';
         if (this._sleep.step === 'end')
             return 'End';
         return `${Math.max(1, Math.ceil((this._sleep.until - clock()) / 60))} min`;
     }
 
-    // Off, then each of SLEEP_STEPS in turn, then off again.
+    // Off, then each of SLEEP_STEPS in turn, then off again. A timer set on
+    // another player counts as off here, and is replaced. The end of the
+    // file is no step for a stream, which has none.
     _cycleSleep() {
-        const at = this._sleep ? SLEEP_STEPS.indexOf(this._sleep.step) : -1;
-        this._setSleep(SLEEP_STEPS[at + 1] ?? null);
+        const at = this._sleep?.player === this._player ? SLEEP_STEPS.indexOf(this._sleep.step) : -1;
+        let step = SLEEP_STEPS[at + 1] ?? null;
+        if (step === 'end' && !this._player.length)
+            step = null;
+        this._setSleep(step);
     }
 
     _setSleep(step) {

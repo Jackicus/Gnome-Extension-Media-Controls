@@ -190,7 +190,9 @@ grabbed. `ignored-gamepads` holds SDL GUIDs (a model, not a unit).
 button cycling 15–120 minutes, then the end of the file, then off; it pauses the
 player, the pause brings the bar up, and GNOME's own screen blank follows once
 the player stops holding it off — the end-of-file step pauses half a second
-before the end so a player set to exit at the end stays open). `bar-scale`
+before the end so a player set to exit at the end stays open. The timer belongs
+to the player it was set on: it survives a moment's change of focus, shows on
+that player's bar alone, and one set on another player replaces it). `bar-scale`
 (75–200 %) is one `font-size` percentage on the panel and the pop-out, which
 every em in the stylesheet follows, plus the icon sizes, which `bar.js` sets
 itself (see Gotchas).
