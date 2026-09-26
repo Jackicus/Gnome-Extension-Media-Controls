@@ -166,6 +166,7 @@ export const ControlBar = GObject.registerClass({
         this._player = null;
         this._syncing = false;
         this._seeking = false;
+        this._scrolled = 0;             // touchpad scroll on the seek slider, in notches
         this._volumeDragging = false;
         this._tickId = 0;
         this._tickMode = null;          // 'playing', 'idle' or null
@@ -275,11 +276,30 @@ export const ControlBar = GObject.registerClass({
         // The slider's own steps are a fraction of the whole — minutes, on a
         // film. A scroll or an arrow key skips the way the buttons do.
         this._seek.connect('scroll-event', (_actor, event) => {
-            const direction = event.get_scroll_direction();
-            if (direction === Clutter.ScrollDirection.UP || direction === Clutter.ScrollDirection.RIGHT)
-                this.emit('action', 'seek-forward');
-            else if (direction === Clutter.ScrollDirection.DOWN || direction === Clutter.ScrollDirection.LEFT)
-                this.emit('action', 'seek-back');
+            if (event.is_pointer_emulated())
+                return Clutter.EVENT_STOP;
+            let notches = 0;
+            switch (event.get_scroll_direction()) {
+            case Clutter.ScrollDirection.UP:
+            case Clutter.ScrollDirection.RIGHT:
+                notches = 1;
+                break;
+            case Clutter.ScrollDirection.DOWN:
+            case Clutter.ScrollDirection.LEFT:
+                notches = -1;
+                break;
+            case Clutter.ScrollDirection.SMOOTH: {
+                const [, dy] = event.get_scroll_delta();
+                this._scrolled -= dy;
+                notches = Math.trunc(this._scrolled);
+                this._scrolled -= notches;
+                break;
+            }
+            default:
+                break;
+            }
+            for (let i = 0; i < Math.abs(notches); i++)
+                this.emit('action', notches > 0 ? 'seek-forward' : 'seek-back');
             return Clutter.EVENT_STOP;
         });
         this._seek.connect('key-press-event', (_actor, event) => {
