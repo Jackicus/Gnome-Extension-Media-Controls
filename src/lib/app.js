@@ -152,6 +152,7 @@ export class MediaControlsApp {
             () => this._dropRemote(),
             () => this._remoteRetryId && GLib.source_remove(this._remoteRetryId),
             () => this._ungrab(),
+            () => this._keyboard?.run_dispose(),
             () => this._pads?.disable(),
             () => this._stopPointerWatch(),
             () => this._hideId && GLib.source_remove(this._hideId),
