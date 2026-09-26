@@ -227,17 +227,15 @@ touch_activity() {
 cmd_start() {
     # Mirrored by default: the whole point of driving the extension is that the
     # user can see what is being tried, without logging out to look.
-    local mirror=1 clean=0
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --headless|--no-mirror) mirror=0 ;;
-            --windowed|--mirror) mirror=1 ;;
+    local mirror=1 clean=0 geometry=1600x900
+    for arg in "$@"; do
+        case "$arg" in
+            --headless) mirror=0 ;;
             --clean) clean=1 ;;
-            *) break ;;
+            [0-9]*x[0-9]*) geometry="$arg" ;;
+            *) die "Unknown start option '$arg'. Usage: start [--headless] [--clean] [WxH]" ;;
         esac
-        shift
     done
-    local geometry="${1:-1600x900}"
     [[ "$geometry" =~ ^[0-9]+x[0-9]+$ ]] || die "Geometry must look like 1600x900, got '$geometry'."
 
     if is_running; then
@@ -544,6 +542,7 @@ ensure_test_video() {
     info "Generating $TEST_VIDEO (10 min, two audio and two subtitle tracks, chapters)..."
     local work
     work="$(mktemp -d)"
+    trap 'rm -rf "$work"' EXIT
     python3 - "$work" <<'PY'
 import sys
 work = sys.argv[1]
@@ -568,8 +567,7 @@ PY
         -metadata:s:a:1 language=eng -metadata:s:a:1 title=English \
         -metadata:s:s:0 language=eng -metadata:s:s:0 title=English \
         -metadata:s:s:1 language=spa -metadata:s:s:1 title=Spanish \
-        "$TEST_VIDEO" || { rm -rf "$work"; die "ffmpeg could not make the test video."; }
-    rm -rf "$work"
+        "$TEST_VIDEO" || die "ffmpeg could not make the test video."
 }
 
 cmd_player() {
@@ -617,16 +615,26 @@ cmd_player() {
         XDG_CONFIG_HOME="$RUN_DIR/vlc/config" gjs -m "$REPO_DIR/scripts/vlc-setup.js" on >/dev/null \
             || warn "Could not write the throwaway VLC settings; no tracks socket."
     fi
+    # Waited for as one more VLC on the bus than before, so a second player
+    # (the two-player check) is waited for as the first was.
+    local before waited=0
+    before="$(vlc_count)"
     nested_env XDG_CONFIG_HOME="$RUN_DIR/vlc/config" XDG_DATA_HOME="$RUN_DIR/vlc/data" \
         setsid "$vlc" "${args[@]}" "${extra[@]}" "$file" \
         >>"$RUN_DIR/player-log" 2>&1 < /dev/null &
-    local waited=0
-    until nested_env gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
-            --method org.freedesktop.DBus.ListNames 2>/dev/null | grep -q "org.mpris.MediaPlayer2.vlc"; do
+    until (( $(vlc_count) > before )); do
         (( waited >= 100 )) && { warn "VLC did not appear on the nested bus. Its output:"; tail -5 "$RUN_DIR/player-log" >&2; return 1; }
         sleep 0.1; waited=$((waited + 1))
     done
     ok "$vlc is playing $(basename "$file") in the nested shell."
+}
+
+# How many MPRIS names VLCs hold on the nested bus (one or two each; what
+# matters is that a new VLC adds to it).
+vlc_count() {
+    nested_env gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
+        --method org.freedesktop.DBus.ListNames 2>/dev/null \
+        | grep -o "'org\.mpris\.MediaPlayer2\.vlc[^']*'" | wc -l
 }
 
 # The first MPRIS player on the nested bus -- enough for checking what a click
@@ -635,7 +643,7 @@ cmd_mpris() {
     require_running
     local dest
     dest="$(nested_env gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
-        --method org.freedesktop.DBus.ListNames | grep -oE "org\.mpris\.MediaPlayer2\.[A-Za-z0-9_.-]+" | head -1)"
+        --method org.freedesktop.DBus.ListNames | grep -oE "org\.mpris\.MediaPlayer2\.[A-Za-z0-9_.-]+" | head -1 || true)"
     [[ -n "$dest" ]] || die "No MPRIS player on the nested bus. Start one with: ./scripts/nested.sh player"
     local call=(nested_env gdbus call --session --dest "$dest" --object-path /org/mpris/MediaPlayer2)
     local iface=org.mpris.MediaPlayer2.Player
@@ -662,6 +670,7 @@ cmd_pad() {
     local hold=1.5
     [[ "${1:-}" =~ ^[0-9.]+$ ]] && { hold="$1"; shift; }
     [[ $# -gt 0 ]] || die "Usage: ./scripts/nested.sh pad [HOLD] south [dpad-right west ...]"
+    python3 -c 'import evdev' 2>/dev/null || die "A virtual pad needs python-evdev (the python-evdev package)."
     python3 "$FAKEPAD" "$hold" "$@"
 }
 
