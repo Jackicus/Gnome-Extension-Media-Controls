@@ -63,7 +63,10 @@ const clockTime = dateTime => formatClock(dateTime, {timeOnly: true}).trim();
 // [start | centre | end], with the centre on the middle of the row whatever
 // the sides hold and the sides sharing what is left — so the transport
 // buttons stay put however long the title is, and a long title ellipsizes
-// rather than pushing them over.
+// rather than pushing them over. The end holds buttons and a slider, which
+// cannot give: when their half is too small (the tracks and sleep buttons
+// both up, at a small size) the centre moves left by the shortfall, and the
+// title gives the room.
 const CentredRowLayout = GObject.registerClass(
 class CentredRowLayout extends Clutter.LayoutManager {
     _init() {
@@ -97,7 +100,11 @@ class CentredRowLayout extends Clutter.LayoutManager {
         const gap = 12 * scaleFactor() * this.scale;
         const [, cNat] = centre.get_preferred_width(height);
         const cWidth = Math.min(cNat, width);
-        const cX = Math.round((width - cWidth) / 2);
+        let cX = Math.round((width - cWidth) / 2);
+        const [, eNat] = end.get_preferred_width(height);
+        const shortfall = eNat - (width - cX - cWidth - gap);
+        if (shortfall > 0)
+            cX = Math.max(0, cX - shortfall);
 
         const place = (child, x1, x2, align) => {
             const room = Math.max(0, x2 - x1);
