@@ -125,12 +125,12 @@ directly cannot hide it.
 **Position** is never polled. MPRIS never announces where playback has got to,
 so `Player` keeps the last reading and the monotonic time it was taken, and
 `now` reckons forward from that at the current rate while playing. A reading is
-taken when the bar comes up from hidden, when a player starts playing, and
-whenever it announces `Seeked`. The bar redraws on a timer that only exists
-while it is visible and something on it moves: every 250 ms while playing, and
-once a second otherwise, for the clock and the sleep countdown, which move by
-the minute. Seeks use `SetPosition(trackid, µs)` where the player names its
-track, relative `Seek` where it does not. **Nothing blocks a player**: every
+taken when the bar comes up from hidden, when a player starts playing, when it
+moves to a new file, and whenever it announces `Seeked`. The bar redraws on a
+timer that only exists while it is visible and something on it moves: every
+250 ms while playing, and once a second otherwise, for the clock and the sleep
+countdown, which move by the minute. Seeks use `SetPosition(trackid, µs)` where
+the player names its track, relative `Seek` where it does not. **Nothing blocks a player**: every
 call is asynchronous with a timeout and a cancellable that `disable()` cancels;
 players are found with `NameOwnerChanged` (arg0 namespace
 `org.mpris.MediaPlayer2`) plus one `ListNames` at enable, and followed with

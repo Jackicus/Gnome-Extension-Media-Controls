@@ -8,8 +8,9 @@
 // it seeks. It never says where playback has got to unless asked. So the
 // position is read, and the clock reading it was taken at kept beside it;
 // where playback is at any moment is that position moved on by the clock
-// while playing (`Player.now`). A reading is taken when the bar comes up and
-// when a player starts playing; a seek announces its own.
+// while playing (`Player.now`). A reading is taken when the bar comes up,
+// when a player starts playing and when it moves to a new file; a seek
+// announces its own.
 //
 // Nothing here blocks a player: every call is asynchronous and cancelled on
 // disable, and a player that never answers leaves a stale row, not a frozen
@@ -233,11 +234,18 @@ export class Player extends EventEmitter {
             this.minRate = props.MinimumRate;
         if ('MaximumRate' in props)
             this.maxRate = props.MaximumRate;
+        // Where the clock's reckoning may be furthest from the truth, one
+        // exact reading is taken: a new file (the next in a playlist does not
+        // always start at 0), and playing again after a buffering pause, or
+        // in a player that only reports Playing once the first frame is out.
+        let refresh = false;
         if ('Metadata' in props) {
             const meta = props.Metadata ?? {};
             const url = meta['xesam:url'] ?? '';
-            if (url !== this.url)
+            if (url !== this.url) {
                 this.read(0);
+                refresh = true;
+            }
             this.url = url;
             this.trackId = meta['mpris:trackid'] ?? null;
             this.length = (meta['mpris:length'] ?? 0) / 1e6;
@@ -248,12 +256,10 @@ export class Player extends EventEmitter {
         if ('PlaybackStatus' in props && props.PlaybackStatus !== this.status) {
             this.settle();
             this.status = props.PlaybackStatus;
-            // Starting again is the moment the clock's reckoning can have
-            // drifted furthest from the truth: a buffering pause, a player
-            // that only reports Playing once the first frame is out.
-            if (this.playing)
-                this.refreshPosition();
+            refresh = true;
         }
+        if (refresh && this.playing)
+            this.refreshPosition();
         if ('Position' in props)
             this.read(props.Position / 1e6);
         if ('Volume' in props) {
