@@ -422,6 +422,8 @@ export class MediaControlsApp {
             if (!this._settings.get_boolean('sleep-timer'))
                 return false;
             this._cycleSleep();
+            // Nothing on the player changed, so the bar is told itself.
+            this._bar.sync();
             break;
         default: return false;
         }
