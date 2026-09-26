@@ -171,8 +171,9 @@ and an Xbox, PlayStation or Switch pad presses the same one. Triggers arrive as
 `BTN_TL2`/`BTN_TR2` presses, d-pad hats as `BTN_DPAD_*`. Pads are never
 grabbed. `ignored-gamepads` holds SDL GUIDs (a model, not a unit).
 
-**Settings that are off by default**: `show-clock` (a line under the title, "21:40
-· ends at 23:12", 12/24-hour as the top bar's clock is set) and `sleep-timer` (a
+**Settings that are off by default**: `show-clock` (a line under the title, "21∶40
+· ends at 23∶12", formatted by the shell's own `dateUtils.formatTime`, so
+12/24-hour as the top bar's clock is set) and `sleep-timer` (a
 button cycling 15–120 minutes, then the end of the file, then off; it pauses the
 player, the pause brings the bar up, and GNOME's own screen blank follows once
 the player stops holding it off — the end-of-file step pauses half a second

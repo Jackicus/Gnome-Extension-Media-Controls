@@ -40,7 +40,6 @@
 // are settings, off by default.
 
 import Clutter from 'gi://Clutter';
-import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
@@ -88,7 +87,6 @@ export class MediaControlsApp {
         this._keyboard = null;
         this._sleep = null;
         this._sleepId = 0;
-        this._interface = null;
     }
 
     enable() {
@@ -134,9 +132,6 @@ export class MediaControlsApp {
             'changed::show-clock', () => this._syncClock(),
             'changed::sleep-timer', () => this._syncSleep(),
             this);
-        // The clock line follows the top bar's 12/24-hour setting.
-        this._interface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
-        this._interface.connectObject('changed::clock-format', () => this._syncClock(), this);
         this._syncClock();
         this._syncSleep();
 
@@ -166,7 +161,6 @@ export class MediaControlsApp {
             () => global.display.disconnectObject(this),
             () => Main.overview.disconnectObject(this),
             () => Main.layoutManager.disconnectObject(this),
-            () => this._interface?.disconnectObject(this),
             () => this._settings?.disconnectObject(this),
             () => this._registry?.disconnectObject(this),
             () => this._registry?.disable(),
@@ -183,7 +177,6 @@ export class MediaControlsApp {
         this._hideId = this._updateId = 0;
         this._player = this._window = null;
         this._keyboard = null;
-        this._interface = null;
         this._registry = null;
         this._bar = null;
         this._settings = null;
@@ -545,8 +538,7 @@ export class MediaControlsApp {
     // Clock and sleep timer
     // ------------------------------------------------------------------
     _syncClock() {
-        this._bar.setClock(this._settings.get_boolean('show-clock')
-            ? this._interface.get_string('clock-format') : null);
+        this._bar.setClock(this._settings.get_boolean('show-clock'));
     }
 
     _syncSleep() {

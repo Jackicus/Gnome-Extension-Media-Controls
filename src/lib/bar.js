@@ -17,6 +17,7 @@ import Meta from 'gi://Meta';
 import Pango from 'gi://Pango';
 import St from 'gi://St';
 
+import {formatTime as formatClock} from 'resource:///org/gnome/shell/misc/dateUtils.js';
 import * as Layout from 'resource:///org/gnome/shell/ui/layout.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
@@ -55,10 +56,9 @@ function setUnredirect(allowed) {
     }
 }
 
-// "21:40" or "9:40 PM", as the top bar's clock is set to.
-function clockTime(dateTime, format) {
-    return dateTime.format(format === '12h' ? '%l:%M %p' : '%H:%M').trim();
-}
+// "21∶40" or "9∶40 PM": the shell's own time formatting, which reads the
+// 12/24-hour setting the top bar's clock follows. `%l` is space-padded.
+const clockTime = dateTime => formatClock(dateTime, {timeOnly: true}).trim();
 
 // [start | centre | end], with the centre on the middle of the row whatever
 // the sides hold and the sides sharing what is left — so the transport
@@ -174,7 +174,7 @@ export const ControlBar = GObject.registerClass({
         this._unredirectOff = false;
         this._scale = 1;
         this._monitorIndex = 0;
-        this._clockFormat = null;       // null: no clock line
+        this._showClock = false;
         this._sleepText = null;         // null: no sleep button
 
         this.panel = new St.BoxLayout({
@@ -472,11 +472,10 @@ export const ControlBar = GObject.registerClass({
             this.tracksMenu.openFresh({focus});
     }
 
-    // The clock line under the title — '24h' or '12h', as the top bar's is —
-    // or null for none.
-    setClock(format) {
-        this._clockFormat = format;
-        this._clock.visible = !!format;
+    // The clock line under the title, or not.
+    setClock(show) {
+        this._showClock = show;
+        this._clock.visible = show;
         this._tick();
         this._updateTicking();
     }
@@ -530,12 +529,12 @@ export const ControlBar = GObject.registerClass({
         const at = this._seeking ? this._seek.value * p.length : p.now;
         this._elapsed.text = formatTime(at);
         this._remaining.text = p.length ? `−${formatTime(p.length - at)}` : '';
-        if (this._clockFormat) {
+        if (this._showClock) {
             const now = GLib.DateTime.new_now_local();
             const left = p.length ? (p.length - at) / (p.rate || 1) : 0;
             this._clock.text = left
-                ? `${clockTime(now, this._clockFormat)} · ends at ${clockTime(now.add_seconds(left), this._clockFormat)}`
-                : clockTime(now, this._clockFormat);
+                ? `${clockTime(now)} · ends at ${clockTime(now.add_seconds(left))}`
+                : clockTime(now);
         }
         if (this._sleepText) {
             const text = this._sleepText();
@@ -557,7 +556,7 @@ export const ControlBar = GObject.registerClass({
         let mode = null;
         if (this.visible && this._player?.playing)
             mode = 'playing';
-        else if (this.visible && (this._clockFormat || this._sleepText))
+        else if (this.visible && (this._showClock || this._sleepText))
             mode = 'idle';
         if (mode === this._tickMode)
             return;
