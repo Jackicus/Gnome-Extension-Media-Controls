@@ -26,15 +26,22 @@ const REVEALS = [
 class Cleanup {
     constructor(window) {
         this._jobs = [];
+        this.closed = false;
         window.connect('close-request', () => {
+            this.closed = true;
             for (const job of this._jobs.splice(0).reverse())
                 job();
             return false;
         });
     }
 
+    // A job added once the window has closed runs at once: what it cleans up
+    // was made after the close (an import that resolved late).
     add(job) {
-        this._jobs.push(job);
+        if (this.closed)
+            job();
+        else
+            this._jobs.push(job);
     }
 
     connect(object, ...args) {
@@ -541,6 +548,9 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         };
 
         import('gi://Manette?version=0.2').then(({default: Manette}) => {
+            // The window can close before the import lands.
+            if (cleanup.closed)
+                return;
             let alive = true;
             cleanup.add(() => {
                 alive = false;
