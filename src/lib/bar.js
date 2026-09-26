@@ -193,9 +193,18 @@ export const ControlBar = GObject.registerClass({
             if (global.focus_manager.navigate_from_event(event))
                 return Clutter.EVENT_STOP;
             // The pop-out's menu has the panel for its source, and a menu
-            // toggles on Return or Space reaching its source: a button has
-            // taken those already, so what gets here (from a slider) stops.
-            if (key === Clutter.KEY_Return || key === Clutter.KEY_KP_Enter || key === Clutter.KEY_space)
+            // toggles on Return, Space or the arrow towards it (Up) reaching
+            // its source. A button has taken Return already; what gets here
+            // is a slider's, or an arrow with nowhere to go — Up from the
+            // top row — and it stops, or the pop-out would open unfilled.
+            switch (key) {
+            case Clutter.KEY_Up:
+            case Clutter.KEY_Down:
+            case Clutter.KEY_Left:
+            case Clutter.KEY_Right:
+            case Clutter.KEY_Return:
+            case Clutter.KEY_KP_Enter:
+            case Clutter.KEY_space:
                 return Clutter.EVENT_STOP;
             return Clutter.EVENT_PROPAGATE;
         });
